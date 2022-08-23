@@ -1,19 +1,22 @@
+import cv2
 import mss
 import numpy as np
 
 sct = mss.mss()
 
-DESKTOP_SCREEN_SIZE = (2560, 1440)
-GAME_LEFT_OFFSET = 414
-GAME_BORDER = 6
+MAC_SCREEN = (3024, 1964)
+MAC_GAME_REGION = {"left": 495, "top": 81, "width": 2522, "height": 1687}
 
-GAME_REGION = {
-    "left": GAME_LEFT_OFFSET + GAME_BORDER,
-    "top": GAME_BORDER,
-    "width": DESKTOP_SCREEN_SIZE[0] - GAME_LEFT_OFFSET - GAME_BORDER * 2,
-    "height": DESKTOP_SCREEN_SIZE[1] - GAME_BORDER * 2,
-}
+DESKTOP_SCREEN = (2560, 1440)
+DESKTOP_GAME_REGION = {"left": 420, "top": 6, "width": 2134, "height": 1428}
 
 
 def grab():
-    return np.asarray(sct.grab(GAME_REGION))
+    monitor = sct.monitors[1]
+    if monitor["width"] == MAC_SCREEN[0]:
+        screen = sct.grab(MAC_GAME_REGION)
+    else:
+        screen = sct.grab(DESKTOP_GAME_REGION)
+    screen = np.asarray(screen)
+    screen = cv2.resize(screen, (374, 250))
+    return screen
