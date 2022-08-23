@@ -10,6 +10,7 @@ opencv-python = "^4.6.0"
 numpy = "^1.23.2"
 mss = "^6.1.0"
 pynput = "^1.7.6"
+tesserocr = "^2.5.2"
 
 [tool.poetry.dev-dependencies]
 black = "^22.6.0"
