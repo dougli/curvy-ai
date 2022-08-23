@@ -1,0 +1,36 @@
+{
+    // General settings
+
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": true
+    },
+    // Use Prettier as the default formatter. It's good for lots of files (e.g.
+    // Javascript, HTML, JSON, YAML). File type-specific overrides can be
+    // provided. For an example, see the "[python]" section below.
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true,
+    "editor.formatOnSaveMode": "file",
+    "editor.tabSize": 2,
+    "extensions.ignoreRecommendations": false,
+
+    "files.trimTrailingWhitespace": true,
+    "files.trimFinalNewlines": true,
+    "files.insertFinalNewline": true,
+
+    // Python
+    "python.analysis.diagnosticMode": "workspace",
+    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.useLibraryCodeForTypes": false,
+
+    "python.formatting.provider": "black",
+    "python.sortImports.args": ["--profile", "black"],
+    "python.languageServer": "Pylance",
+    "[python]": {
+      "editor.defaultFormatter": "ms-python.python",
+      "editor.codeActionsOnSave": { "source.organizeImports": true },
+      "editor.detectIndentation": false,
+      // Black doesn't support formatting selections, so turn off formatOnPaste to avoid warning messages.
+      "editor.formatOnPaste": false,
+      "editor.tabSize": 4
+    }
+  }
