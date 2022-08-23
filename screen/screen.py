@@ -12,11 +12,12 @@ DESKTOP_GAME_REGION = {"left": 420, "top": 6, "width": 2134, "height": 1428}
 
 
 def grab():
+    """Returns a 300x200 image of the game playing area"""
     monitor = sct.monitors[1]
     if monitor["width"] == MAC_SCREEN[0]:
-        screen = sct.grab(MAC_GAME_REGION)
+        image = sct.grab(MAC_GAME_REGION)
     else:
-        screen = sct.grab(DESKTOP_GAME_REGION)
-    screen = np.asarray(screen)
-    screen = cv2.resize(screen, (374, 250))
-    return screen
+        image = sct.grab(DESKTOP_GAME_REGION)
+    image = np.asarray(image)
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    return cv2.resize(image, (300, 200))
