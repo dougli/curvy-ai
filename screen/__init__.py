@@ -1,1 +1,1 @@
-from .screen import grab
+from .screen import screen
