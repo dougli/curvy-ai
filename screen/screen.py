@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from tkinter import N
 from typing import NamedTuple, Optional
 
@@ -16,8 +17,11 @@ MAC_GAME_REGION = Rect(x=495, y=81, w=2522, h=1687)
 MAC_SCORING_REGION = Rect(x=0, y=0, w=100, h=100)
 
 DESKTOP_SCREEN = (2560, 1440)
-DESKTOP_GAME_REGION = Rect(x=420, y=6, w=2134, h=1428)
+# DESKTOP_GAME_REGION = Rect(x=420, y=6, w=2134, h=1428)
+DESKTOP_GAME_REGION = Rect(x=400, y=0, w=2160, h=1440)
 DESKTOP_SCORING_REGION = Rect(x=340, y=88, w=48, h=55 * 8)
+GAME_AREA_SIZE = (180, 270)
+
 
 IN_BLACK = np.array([64], dtype=np.float32)
 IN_WHITE = np.array([220], dtype=np.float32)
@@ -29,6 +33,13 @@ SCORE_STATE_THRESHOLD = 205
 
 
 tesseract_api = PyTessBaseAPI()
+
+
+@dataclass
+class GameState:
+    score: int
+    alive: bool
+    dead: bool
 
 
 class Screen:
@@ -54,38 +65,43 @@ class Screen:
             self.game_region.y : self.game_region.y + self.game_region.h,
             self.game_region.x : self.game_region.x + self.game_region.w,
         ]
-        image = cv2.resize(image, (300, 200))
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+        if self.game_region == DESKTOP_GAME_REGION:
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            image = (
+                image.reshape(GAME_AREA_SIZE[0], 8, GAME_AREA_SIZE[1], 8)
+                .mean(-1, dtype=np.float32)
+                .mean(1, dtype=np.float32)
+                .astype(np.uint8)
+            )
+        else:
+            image = cv2.resize(image, GAME_AREA_SIZE, interpolation=cv2.INTER_AREA)
 
         # Clip for a cleaner image
         image = np.clip((image - IN_BLACK) / (IN_WHITE - IN_BLACK), 0, 255)  # type: ignore
         return image
 
-    def score(self) -> Optional[int]:
+    def game_state(self) -> GameState:
         # Grab the scoring region
         image = self.image[
             self.scoring_region.y : self.scoring_region.y + self.scoring_region.h,
             self.scoring_region.x : self.scoring_region.x + self.scoring_region.w,
         ]
-        # image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
         # Returns a one-hot vector of the player index if alive, otherwise a zero vector
         is_alive, score = self._check_state(image, SCORE_ALIVE_COLOR)
         if is_alive:
-            print(f"ALIVE - {score}")
-            return score
+            return GameState(score, alive=True, dead=False)
         is_dead, score = self._check_state(image, SCORE_DEAD_COLOR)
         if is_dead:
-            print(f"DEAD  - {score}")
-            return score
-        return None
+            return GameState(score, alive=False, dead=True)
+        return GameState(-1, alive=False, dead=False)
 
-    def _check_state(self, image, color) -> tuple[bool, Optional[int]]:
+    def _check_state(self, image, color) -> tuple[bool, int]:
         """Returns a tuple, where the first element is True if the player is in that
         state, and the second element is the player's score"""
         vs = image[:, -1:, :3]
         mask = cv2.inRange(vs, color - 4, color + 4)
-        cv2.imshow("In range", mask)
         mask = cv2.resize(mask, (1, 8), interpolation=cv2.INTER_AREA)
         cv2.threshold(mask, SCORE_STATE_THRESHOLD, 1, cv2.THRESH_BINARY, mask)
         is_state = np.max(mask)
@@ -99,8 +115,8 @@ class Screen:
             try:
                 return True, int(tesseract_api.GetUTF8Text())
             except ValueError:
-                return True, None
-        return False, None
+                return True, -1
+        return False, -1
 
 
 screen = Screen()

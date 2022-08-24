@@ -9,7 +9,7 @@ start_time = time.time()
 while True:
     screen.frame()
     image = screen.game_area()
-    score = screen.score()
+    score = screen.game_state()
 
     now = time.time()
     frames += 1
