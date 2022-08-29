@@ -1,97 +1,159 @@
-import random
-from collections import deque
-
 import numpy as np
 import torch
 
-from agent.net import CurvyNet
+
+class Memory:
+    def __init__(self, device: torch.device):
+        self.device = device
+        self.clear()
+
+    def remember(self, state, action, probs, values, reward: float, done: bool):
+        self.states.append(state)
+        self.actions.append(action.unsqueeze(1).to(self.device))
+        self.values.append(values)
+        self.log_probs.append(probs.unsqueeze(1).to(self.device))
+        self.rewards.append(torch.FloatTensor([reward]).unsqueeze(1).to(self.device))
+        self.masks.append(torch.FloatTensor([1 - done]).unsqueeze(1).to(self.device))
+
+    def clear(self):
+        self.states = []
+        self.actions = []
+        self.values = []
+        self.log_probs = []
+        self.rewards = []
+        self.masks = []
+
+    def compute_gae(self, next_value: float, gamma: float, tau: float):
+        """Compute the generalized advantage estimator. The generalized advantage
+        estimator is an estimate of the advantage of state s_t, which suggests how
+        much better s_t is than the previous state s_t-1.
+
+        It uses a calculation of discounted future rewards, where the discounted
+        future rewards are calculated as:
+            discounted_future_rewards = reward + gamma * next_value
+        The advantage is then calculated as:
+            advantage = discounted_future_rewards - value
+        """
+        values = self.values + [next_value]
+        gae = 0
+        returns = []
+        for step in reversed(range(len(self.rewards))):
+            delta = (
+                self.rewards[step]
+                + gamma * values[step + 1] * self.masks[step]
+                - values[step]
+            )
+            gae = delta + gamma * tau * self.masks[step] * gae
+            returns.insert(0, gae + values[step])
+        return returns
+
+    def export_for_learning(self, next_value, gamma, tau):
+        returns = self.compute_gae(next_value, gamma, tau)
+        returns = torch.cat(returns).detach()
+        values = torch.cat(self.values).detach()
+        advantage = returns - values
+        print(values)
+        result = Batch(
+            torch.cat(self.states),
+            torch.cat(self.actions),
+            torch.cat(self.log_probs).detach(),
+            returns,
+            advantage,
+        )
+        self.clear()
+        return result
+
+
+class Batch:
+    def __init__(self, states, actions, log_probs, returns, advantage):
+        self.states = states
+        self.actions = actions
+        self.log_probs = log_probs
+        self.returns = returns
+        self.advantage = advantage
+
+    def generate_minibatch(self, minibatch_size):
+        """Generate a minibatch for learning. Continues to yield results until all
+        data is used up."""
+        batch_size = self.states.size(0)
+        for _ in range(max(batch_size // minibatch_size, 1)):
+            rand_ids = np.random.randint(0, batch_size, min(minibatch_size, batch_size))
+            yield self.states[rand_ids, :], self.actions[rand_ids, :], self.log_probs[
+                rand_ids, :
+            ], self.returns[rand_ids, :], self.advantage[rand_ids, :]
 
 
 class Agent:
-    def __init__(self, state_space, action_space, save_dir):
-        self.state_space = state_space
-        self.action_space = action_space
-        self.save_dir = save_dir
-        self.model = CurvyNet(self.state_space, self.action_space)
-        self.model.load_state_dict(torch.load(self.save_dir))
-        self.model.eval()
+    def __init__(self, model: torch.nn.Module, device: torch.device) -> None:
 
-        self.net = CurvyNet(self.state_space, self.action_space).float()
+        # ----------------------------------------------------------------------
+        # ATARI parameters
+        # ----------------------------------------------------------------------
+        # self.lr = 2.5e-4  # Learning rate (Adam stepsize)
+        # self.epochs = 3  # Number of epochs to train per update
+        # self.minibatch_size = 32  # Number of samples per minibatch
+        # self.gamma = 0.99  # Discount factor
+        # self.tau = 0.95  # Generalized advantage estimation factor (GAE)
+        # self.epsilon = 0.1  # Clipping parameter for PPO
+        # self.c1 = 1  # C1 hyperparameter for value loss
+        # self.c2 = 0.01  # C2 hyperparameter for entropy bonus
 
-        self.exploration_rate = 1.0
-        self.exploration_rate_decay = 0.99999975
-        self.exploration_rate_min = 0.1
-        self.curr_step = 0
+        # ----------------------------------------------------------------------
+        # Cartpole parameters
+        # ----------------------------------------------------------------------
+        self.lr = 0.0003  # Learning rate (Adam stepsize)
+        self.epsilon = 0.2
+        self.c1 = 0.5
+        self.c2 = 0.01
+        self.epochs = 3
+        self.gamma = 0.99
+        self.tau = 0.95
+        self.minibatch_size = 32
 
-        self.memory = deque(maxlen=30000)
-        self.batch_size = 32
+        self.model = model
+        self.optimizer = torch.optim.Adam(model.parameters(), lr=self.lr)
+        self.memory = Memory(device)
 
-        self.remember_every = 5  # How often to remember. We just don't have emough memory to remember every step.
-        self.save_every = 9000  # Save every 9000 steps -- roughly 5 minutes at 30 fps
+    def remember(self, state, action, probs, values, reward, done):
+        self.memory.remember(state, action, probs, values, reward, done)
 
-        self.gamma = 0.9  # Discount factor
-        self.optimizer = torch.optim.Adam(self.net.parameters(), lr=0.00025)
-        self.loss_fn = torch.nn.SmoothL1Loss()
+    def learn(self, next_state: torch.Tensor):
+        _, next_value = self.act(next_state)
+        batch = self.memory.export_for_learning(next_value, self.gamma, self.tau)
+        self.ppo_update(batch)
 
-    def act(self, state: np.ndarray):
-        # Exploration vs exploitation
-        if np.random.rand() < self.exploration_rate:
-            return np.random.randint(self.action_space)
-        else:
-            state_tensor = torch.from_numpy(state)
-            action_values = self.net(state_tensor, model="online")
-            action_idx = torch.argmax(action_values).item()
+    def ppo_update(self, batch: Batch):
+        for _ in range(self.epochs):
+            for (
+                state,
+                action,
+                old_log_probs,
+                return_,
+                advantage,
+            ) in batch.generate_minibatch(self.minibatch_size):
+                dist, value = self.model(state)
+                entropy = dist.entropy().mean()
+                new_log_probs = dist.log_prob(action)
 
-        self.exploration_rate *= self.exploration_rate_decay
-        self.exploration_rate = max(self.exploration_rate, self.exploration_rate_min)
+                ratio = (new_log_probs - old_log_probs).exp()
+                surr1 = ratio * advantage
+                surr2 = (
+                    torch.clamp(ratio, 1.0 - self.epsilon, 1.0 + self.epsilon)
+                    * advantage
+                )
 
-        self.curr_step += 1
-        return action_idx
+                actor_loss = -torch.min(surr1, surr2).mean()
+                critic_loss = (return_ - value).pow(2).mean()
+                print(
+                    f"Actor loss: {actor_loss.item()}, Critic loss: {critic_loss.item()}"
+                )
+                loss = self.c1 * critic_loss + actor_loss - self.c2 * entropy
 
-    def remember(
-        self,
-        state: np.ndarray,
-        next_state: np.ndarray,
-        action: int,
-        reward: float,
-        done: bool,
-    ):
-        if self.curr_step % self.remember_every == 0:
-            entry = (
-                torch.from_numpy(state).float(),
-                torch.from_numpy(next_state).float(),
-                torch.tensor([action]).float(),
-                torch.tensor([reward]).float(),
-                torch.tensor([done]).float(),
-            )
-            self.memory.append(entry)
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
 
-    def recall(self):
-        batch = random.sample(self.memory, self.batch_size)
-        state, next_state, action, reward, done = map(torch.stack, zip(*batch))
-        return state, next_state, action.squeeze(), reward.squeeze(), done.squeeze()
-
-    def td_estimate(self, state, action):
-        current_Q = self.net(state, model="online")[
-            np.arange(0, self.batch_size), action
-        ]  # Q_online(s,a)
-        return current_Q
-
-    def td_target(self, reward, next_state, done):
-        next_state_Q = self.net(next_state, model="online")
-        best_action = torch.argmax(next_state_Q, dim=1)
-        next_Q = self.net(next_state, model="target")[
-            np.arange(0, self.batch_size), best_action
-        ]
-        return (reward + (1 - done.float()) * self.gamma * next_Q).float()
-
-    def update_Q_online(self, td_estimate, td_target):
-        loss = self.loss_fn(td_estimate, td_target)
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
-        return loss.item()
-
-    def sync_Q_target(self):
-        self.net.target_conv.load_state_dict(self.net.online_conv.state_dict())
-        self.net.target_fc.load_state_dict(self.net.online_fc.state_dict())
+    def act(
+        self, state: torch.Tensor
+    ) -> tuple[torch.distributions.Categorical, torch.Tensor]:
+        return self.model(state)
