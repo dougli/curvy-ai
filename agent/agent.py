@@ -145,7 +145,7 @@ class Agent:
                 actor_loss = -torch.min(surr1, surr2).mean()
                 critic_loss = (return_ - value).pow(2).mean()
                 print(
-                    f"Actor loss: {actor_loss.item()}, Critic loss: {critic_loss.item()}"
+                    f"Actor loss: {actor_loss.item()}, Critic loss: {critic_loss.item()}, Entropy: {entropy.item()}"
                 )
                 loss = self.c1 * critic_loss + actor_loss - self.c2 * entropy
 

@@ -36,9 +36,9 @@ def init_device():
     if cuda:
         print("Using CUDA")
         device = torch.device("cuda")
-    elif mps:
-        print("Using MPS")
-        device = torch.device("mps")
+    # elif mps:
+    #     print("Using MPS")
+    #     device = torch.device("mps")
     else:
         print("Using CPU")
         device = torch.device("cpu")
