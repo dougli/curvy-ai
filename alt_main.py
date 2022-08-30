@@ -29,7 +29,7 @@ if __name__ == "__main__":
     n_epochs = 4
     alpha = 0.0003
     agent = Agent(
-        # device=init_device(),
+        device=init_device(),
         n_actions=2,
         batch_size=batch_size,
         alpha=alpha,
@@ -79,4 +79,4 @@ if __name__ == "__main__":
             learn_iters,
         )
     x = [i + 1 for i in range(len(score_history))]
-    # plot_learning_curve(x, score_history, figure_file)
+    plot_learning_curve(x, score_history, figure_file)
