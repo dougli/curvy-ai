@@ -75,11 +75,21 @@ class Batch:
         """Generate a minibatch for learning. Continues to yield results until all
         data is used up."""
         batch_size = self.states.size(0)
-        for _ in range(max(batch_size // minibatch_size, 1)):
-            rand_ids = np.random.randint(0, batch_size, min(minibatch_size, batch_size))
-            yield self.states[rand_ids, :], self.actions[rand_ids, :], self.log_probs[
-                rand_ids, :
-            ], self.returns[rand_ids, :], self.advantage[rand_ids, :]
+        assert batch_size % minibatch_size == 0
+
+        indices = np.arange(batch_size)
+        np.random.shuffle(indices)
+        for start in range(0, batch_size, minibatch_size):
+            end = start + minibatch_size
+            ids = indices[start:end]
+            # rand_ids = np.random.randint(0, batch_size, min(minibatch_size, batch_size))
+            yield (
+                self.states[ids, :],
+                self.actions[ids, :],
+                self.log_probs[ids, :],
+                self.returns[ids, :],
+                self.advantage[ids, :],
+            )
 
 
 class Agent:

@@ -24,8 +24,8 @@ def init_device():
 
 if __name__ == "__main__":
     env = gym.make("CartPole-v0")
-    N = 128
-    batch_size = 32
+    N = 20
+    batch_size = 5
     n_epochs = 4
     alpha = 0.0003
     agent = Agent(
@@ -79,4 +79,4 @@ if __name__ == "__main__":
             learn_iters,
         )
     x = [i + 1 for i in range(len(score_history))]
-    plot_learning_curve(x, score_history, figure_file)
+    # plot_learning_curve(x, score_history, figure_file)
