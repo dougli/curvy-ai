@@ -52,7 +52,6 @@ class Memory:
         returns = torch.cat(returns).detach()
         values = torch.cat(self.values).detach()
         advantage = returns - values
-        print(values)
         result = Batch(
             torch.cat(self.states),
             torch.cat(self.actions),
@@ -104,11 +103,11 @@ class Agent:
         self.lr = 0.0003  # Learning rate (Adam stepsize)
         self.epsilon = 0.2
         self.c1 = 0.5
-        self.c2 = 0.01
-        self.epochs = 3
+        self.c2 = 0.00
+        self.epochs = 4
         self.gamma = 0.99
         self.tau = 0.95
-        self.minibatch_size = 32
+        self.minibatch_size = 5
 
         self.model = model
         self.optimizer = torch.optim.Adam(model.parameters(), lr=self.lr)
@@ -144,11 +143,7 @@ class Agent:
 
                 actor_loss = -torch.min(surr1, surr2).mean()
                 critic_loss = (return_ - value).pow(2).mean()
-                print(
-                    f"Actor loss: {actor_loss.item()}, Critic loss: {critic_loss.item()}, Entropy: {entropy.item()}"
-                )
                 loss = self.c1 * critic_loss + actor_loss - self.c2 * entropy
-
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()

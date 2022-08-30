@@ -24,8 +24,8 @@ def init_device():
 
 if __name__ == "__main__":
     env = gym.make("CartPole-v0")
-    N = 20
-    batch_size = 5
+    N = 128
+    batch_size = 32
     n_epochs = 4
     alpha = 0.0003
     agent = Agent(
@@ -54,7 +54,6 @@ if __name__ == "__main__":
         while not done:
             action, prob, val = agent.choose_action(observation)
             observation_, reward, done, info = env.step(action)  # type: ignore
-            env.render()
             n_steps += 1
             score += reward
             agent.remember(observation, action, prob, val, reward, done)
