@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from this import d
 from torch import nn
 
 
@@ -63,6 +64,12 @@ class CurvyNet(nn.Module):
     def forward(self, x):
         # x = self.shared(x)
         value = self.critic(x)
-        action_probs = self.actor(x)
-        probs = torch.distributions.Categorical(action_probs)
-        return probs, value
+        dist = self.actor(x)
+        dist = torch.distributions.Categorical(dist)
+        return dist, value
+
+    def save_checkpoint(self):
+        pass
+
+    def load_checkpoint(self):
+        pass
