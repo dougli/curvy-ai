@@ -23,7 +23,7 @@ class Memory:
         self.rewards = []
         self.masks = []
 
-    def compute_gae(self, next_value: float, gamma: float, tau: float):
+    def compute_gae(self, next_value: float, gamma: float, gae_lambda: float):
         """Compute the generalized advantage estimator. The generalized advantage
         estimator is an estimate of the advantage of state s_t, which suggests how
         much better s_t is than the previous state s_t-1.
@@ -43,12 +43,12 @@ class Memory:
                 + gamma * values[step + 1] * self.masks[step]
                 - values[step]
             )
-            gae = delta + gamma * tau * self.masks[step] * gae
+            gae = delta + gamma * gae_lambda * self.masks[step] * gae
             returns.insert(0, gae + values[step])
         return returns
 
-    def export_for_learning(self, next_value, gamma, tau):
-        returns = self.compute_gae(next_value, gamma, tau)
+    def export_for_learning(self, next_value, gamma, gae_lambda):
+        returns = self.compute_gae(next_value, gamma, gae_lambda)
         returns = torch.cat(returns).detach()
         values = torch.cat(self.values).detach()
         advantage = returns - values
@@ -116,7 +116,7 @@ class Agent:
         self.c2 = 0.00
         self.epochs = 4
         self.gamma = 0.99
-        self.tau = 0.95
+        self.gae_lambda = 0.95
         self.minibatch_size = 5
 
         self.model = model
@@ -128,7 +128,7 @@ class Agent:
 
     def learn(self, next_state: torch.Tensor):
         _, next_value = self.act(next_state)
-        batch = self.memory.export_for_learning(next_value, self.gamma, self.tau)
+        batch = self.memory.export_for_learning(next_value, self.gamma, self.gae_lambda)
         self.ppo_update(batch)
 
     def ppo_update(self, batch: Batch):
