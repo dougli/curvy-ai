@@ -1,12 +1,12 @@
-from dataclasses import dataclass
-from tkinter import N
-from typing import NamedTuple, Optional
+from typing import NamedTuple
 
 import cv2
 import mss
 import numpy as np
 from PIL import Image
 from tesserocr import PyTessBaseAPI
+
+from .types import GameState
 
 Rect = NamedTuple("Rect", [("x", int), ("y", int), ("w", int), ("h", int)])
 
@@ -33,13 +33,6 @@ SCORE_STATE_THRESHOLD = 205
 
 
 tesseract_api = PyTessBaseAPI()
-
-
-@dataclass
-class GameState:
-    score: int
-    alive: bool
-    dead: bool
 
 
 class Screen:

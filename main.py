@@ -1,27 +1,29 @@
-import time
+import asyncio
 
-import cv2
-import gym
-import numpy as np
-import torch
-import torch.backends.mps
+from screen import Game
 
-from agent.agent import Agent
-from agent.net import CurvyNet
-from screen import screen
+# frames = 0
+# start_time = time.time()
+# while True:
+#     screen.frame()
+#     image = screen.game_area()
+#     game_state = screen.game_state()
+#     now = time.time()
+#     frames += 1
+#     fps = round(frames / (now - start_time), 2)
+#     print(
+#         f"Score: {game_state.score}, Alive: {game_state.alive}, Dead: {game_state.dead}, FPS: {fps}"
+#     )
 
-frames = 0
-start_time = time.time()
-while True:
-    screen.frame()
-    image = screen.game_area()
-    game_state = screen.game_state()
-    now = time.time()
-    frames += 1
-    fps = round(frames / (now - start_time), 2)
-    print(
-        f"Score: {game_state.score}, Alive: {game_state.alive}, Dead: {game_state.dead}, FPS: {fps}"
-    )
+
+async def main():
+    game = Game("lidouglas@gmail.com", "mzk-drw-krd3EVP5axn", headless=False)
+    await game.launch()
+    # await asyncio.sleep(500)
+    # await game.close()
+
+
+asyncio.run(main())
 
 # env = gym.make("CartPole-v1", new_step_api=True)
 
