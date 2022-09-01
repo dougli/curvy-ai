@@ -1,6 +1,10 @@
 import asyncio
+import random
+import time
 
+import logger
 from screen import Game
+from screen.types import Action
 
 # frames = 0
 # start_time = time.time()
@@ -17,10 +21,26 @@ from screen import Game
 
 
 async def main():
-    game = Game("lidouglas@gmail.com", "mzk-drw-krd3EVP5axn", headless=False)
+    game = Game("lidouglas@gmail.com", "mzk-drw-krd3EVP5axn", show_screen=True)
     await game.launch()
-    # await asyncio.sleep(500)
-    # await game.close()
+    await game.start_game()
+    while True:
+        state = game.state
+        fps = game.fps
+        logger.info(
+            f"Score: {state.score}, Alive: {state.alive}, Dead: {state.dead}, FPS: {fps}"
+        )
+        if state.alive:
+            action = random.randint(0, 4)
+            start_time = time.time()
+            await game.set_action(Action(action))
+            end_time = time.time()
+            logger.warning(
+                f"Action: {Action(action).name}, Time: {end_time - start_time}"
+            )
+        await asyncio.sleep(1 / 60)
+
+    await game.close()
 
 
 asyncio.run(main())

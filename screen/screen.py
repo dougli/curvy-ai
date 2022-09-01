@@ -1,14 +1,10 @@
-from typing import NamedTuple
-
 import cv2
 import mss
 import numpy as np
 from PIL import Image
 from tesserocr import PyTessBaseAPI
 
-from .types import GameState
-
-Rect = NamedTuple("Rect", [("x", int), ("y", int), ("w", int), ("h", int)])
+from .types import GameState, Rect
 
 sct = mss.mss()
 
