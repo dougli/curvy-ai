@@ -4,6 +4,7 @@ import collections
 import os
 import secrets
 import time
+from functools import cached_property
 from typing import Any, Optional
 
 import cv2
@@ -13,7 +14,7 @@ from PIL import Image
 from termcolor import colored
 from tesserocr import PyTessBaseAPI
 
-from .types import Action, GameState, Rect
+from .types import Action, Player, Rect
 
 os.environ["PYPPETEER_CHROMIUM_REVISION"] = "1012729"
 
@@ -30,12 +31,16 @@ VIEWPORT = {"width": 1280, "height": 720}
 PLAY_AREA = Rect(x=200, y=0, w=1080, h=720)
 PLAY_AREA_RESIZED = (144, 216)
 
+INITIAL_SCORE = 10
 SCORE_HEIGHT = 27
 SCORE_AREA = Rect(x=170, y=43, w=25, h=SCORE_HEIGHT * 8)
 SCORE_ALIVE_COLOR = np.array([60, 46, 39], dtype=np.float32)  # 272e3c
 SCORE_DEAD_COLOR = np.array([43, 27, 22], dtype=np.float32)  # 161b2b
 SCORE_BACKGROUND_COLOR = np.array([36, 19, 14], dtype=np.float32)  # 0e1324
 SCORE_STATE_THRESHOLD = 205
+
+REWARD_ALIVE_BONUS = 0.001  # Small bonus every frame for staying alive
+REWARD_DEAD_PENALTY = 0  # Penalty for dying
 
 FPS_COUNTER_SIZE = 10
 
@@ -60,6 +65,10 @@ class Game:
         self.screen = None
         self.frame_times = collections.deque(maxlen=FPS_COUNTER_SIZE)
         self.current_action = Action.NOTHING
+        self.in_play = False
+        self.frame_id = 0
+        self.screen_lock = asyncio.Condition()
+        self.score = INITIAL_SCORE
 
     async def launch(self):
         args = pyppeteer.defaultArgs({"headless": self.headless})
@@ -89,9 +98,7 @@ class Game:
         logger.info("Loading Curve Fever Pro...")
         await self.page.goto(CURVE_FEVER)
 
-    async def start_game(self) -> None:
-        """Start a game. Clicks through all of the menus to get the game to start."""
-
+    async def login(self) -> None:
         # Click the "SIGN IN" link.
         logger.info("Signing in...")
         await self.page.waitForSelector("a.sign-in")
@@ -105,6 +112,7 @@ class Game:
         button = await self.page.xpath("//button[contains(., 'SIGN IN')]")
         await button[0].click()
 
+    async def create_match(self) -> None:
         # Dismiss an annoying popup that sometimes shows up.
         logger.info("Dismissing annoying popup...")
         await self.page.waitForSelector(".popup__x-button", timeout=5000)
@@ -129,6 +137,7 @@ class Game:
         )
         await button[0].click()  # Click the final "CREATE MATCH" button.
 
+    async def start_match(self) -> None:
         # Wait for an ad to complete, which is usually 30 seconds.
         logger.info("Waiting for ad to complete (takes over 30s)...")
         await asyncio.sleep(10)
@@ -157,13 +166,15 @@ class Game:
         await self.page.click("button.button--start-timer")
 
         await self.page.waitForSelector("canvas")
+        self.in_play = True
         asyncio.ensure_future(self._wait_for_game_end())
         logger.success("Game started!")
 
     @property
     def play_area(self) -> Optional[np.ndarray]:
-        if self.screen is not None:
-            image = self.screen[
+        screen = self.screen
+        if screen is not None:
+            image = screen[
                 PLAY_AREA.y : PLAY_AREA.y + PLAY_AREA.h,
                 PLAY_AREA.x : PLAY_AREA.x + PLAY_AREA.w,
             ]
@@ -180,12 +191,18 @@ class Game:
             return image
         return None
 
-    @property
-    def state(self) -> GameState:
-        if self.screen is None:
-            return GameState(-1, False, False)
+    @cached_property
+    def player(self) -> Player:
+        """Returns the current player state. Not thread-safe.
+
+        Player state includes their score and whether we can determine they are alive or
+        dead.
+        """
+        screen = self.screen
+        if screen is None:
+            return Player(-1, False, False)
         # Grab the scoring region
-        image = self.screen[
+        image = screen[
             SCORE_AREA.y : SCORE_AREA.y + SCORE_AREA.h,
             SCORE_AREA.x : SCORE_AREA.x + SCORE_AREA.w,
         ]
@@ -193,11 +210,11 @@ class Game:
         # Returns a one-hot vector of the player index if alive, otherwise a zero vector
         is_alive, score = self._ocr_state(image, SCORE_ALIVE_COLOR)
         if is_alive:
-            return GameState(score, alive=True, dead=False)
+            return Player(score, alive=True, dead=False)
         is_dead, score = self._ocr_state(image, SCORE_DEAD_COLOR)
         if is_dead:
-            return GameState(score, alive=False, dead=True)
-        return GameState(-1, alive=False, dead=False)
+            return Player(score, alive=False, dead=True)
+        return Player(-1, alive=False, dead=False)
 
     @property
     def fps(self) -> float:
@@ -208,11 +225,86 @@ class Game:
     async def set_action(self, action: Action) -> None:
         if action == self.current_action:
             return
+
+        key_events = []
         if self.current_action != Action.NOTHING:
-            await self.page.keyboard.up(self.current_action.key)
+            key_events.append(self.page.keyboard.up(self.current_action.key))
         if action != Action.NOTHING:
-            await self.page.keyboard.down(action.key)
+            key_events.append(self.page.keyboard.down(action.key))
+
+        await asyncio.gather(*key_events)
         self.current_action = action
+
+    async def step(self, action: Action) -> tuple[float, bool]:
+        """Take a step in the environment.
+
+        Args:
+            action (Action): The action to take.
+
+        Returns:
+            tuple[float, bool]: The reward and whether the game is over.
+        """
+        if not self.in_play:
+            return 0, True
+
+        curr_state = self.player
+
+        if curr_state.dead:
+            return 0, True
+
+        if not curr_state.alive:
+            # If we are neither dead nor alive, we are in one of the following states:
+            #
+            # 1. The game is in play and we are alive, but the score ranking has changed
+            #    and for a few frames we cannot accurately determine the score or state.
+            #    This will only happen in multiplayer games.
+            #
+            # 2. The run has ended because everyone else has died. This will only happen
+            #    in multiplayer games.
+            #
+            # 3. The game has crashed, disconnected, or for whatever reason something
+            #    awful happened, and we are no longer in a game.
+            #
+            # 4. The game canvas has rendered the game but the game hasn't started yet.
+            #
+            # States 1 and 2 are only possible in multiplayer games. State 3 should be
+            # handled by _wait_for_game_end(), and state 4 should be handled by the
+            # caller, awaiting for wait_for_alive() before calling step().
+            pass
+
+        # Perform the input
+        await self.set_action(action)
+
+        # Wait for a new frame
+        async with self.screen_lock:
+            await self.screen_lock.wait()
+
+        next_state = self.player
+
+        # Calculate the reward
+        score_reward = 0
+        alive_reward = (
+            next_state.alive * REWARD_ALIVE_BONUS
+            + next_state.dead * REWARD_DEAD_PENALTY
+        )
+
+        if next_state.score != -1:
+            score_reward = next_state.score - self.score
+            self.score = next_state.score
+        final_reward = score_reward + alive_reward
+
+        return final_reward, False
+
+    async def wait_for_alive(self):
+        """Wait for the player to be alive."""
+        while True:
+            player = self.player
+            if player.alive:
+                return
+
+            # Wait for a new frame
+            async with self.screen_lock:
+                await self.screen_lock.wait()
 
     async def close(self):
         self.cdp.send("Page.stopScreencast")
@@ -220,6 +312,8 @@ class Game:
         await self.browser.close()
 
     def _on_screencast_frame(self, params: dict[str, Any]) -> None:
+        self.frame_id += 1
+        self.frame_times.append(time.time())
         self.cdp.send(
             "Page.screencastFrameAck",
             {"sessionId": params["sessionId"]},
@@ -228,12 +322,18 @@ class Game:
         image = base64.b64decode(params["data"])
         image = np.frombuffer(image, dtype=np.uint8)
         image = cv2.imdecode(image, cv2.IMREAD_COLOR)
-        self.screen = image
 
-        self.frame_times.append(time.time())
+        asyncio.ensure_future(self._update_screen(image))
+
+    async def _update_screen(self, image) -> None:
+        async with self.screen_lock:
+            self.screen = image
+            self.screen_lock.notify_all()
+        if hasattr(self, "player"):
+            del self.player
 
         if self.show_screen:
-            cv2.imshow("Screen", self.screen)
+            cv2.imshow("Screen", image)
             cv2.waitKey(1)
 
     def _ocr_state(self, image, color) -> tuple[bool, int]:
@@ -261,6 +361,26 @@ class Game:
 
     async def _wait_for_game_end(self):
         # Wait indefinitely for the game to end.
-        await self.page.waitForSelector("canvas", hidden=True, timeout=0)
-        logger.warning("Game ended!")
-        self.screen = None
+        wait_for_canvas = self.page.waitForSelector("canvas", hidden=True, timeout=0)
+        wait_for_rematch = self.page.waitForSelector(".rematch-container", timeout=0)
+
+        done, pending = await asyncio.wait(
+            [wait_for_canvas, wait_for_rematch], return_when=asyncio.FIRST_COMPLETED
+        )
+        self.in_play = False
+        self.score = INITIAL_SCORE
+        for task in pending:
+            task.cancel()
+        await self.set_action(Action.NOTHING)
+
+        if wait_for_rematch in done:
+            logger.success("Game ended smoothly! Starting a new game...")
+            await asyncio.sleep(0.5)
+            await self.page.click(".rematch-container")
+            await self.start_match()
+            return
+
+        logger.warning("Game ended suddenly! Canvas window was killed. Refreshing...")
+        await self.page.reload()
+        await self.create_match()
+        await self.start_match()

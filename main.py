@@ -3,44 +3,39 @@ import random
 import time
 
 import logger
-from screen import Game
-from screen.types import Action
-
-# frames = 0
-# start_time = time.time()
-# while True:
-#     screen.frame()
-#     image = screen.game_area()
-#     game_state = screen.game_state()
-#     now = time.time()
-#     frames += 1
-#     fps = round(frames / (now - start_time), 2)
-#     print(
-#         f"Score: {game_state.score}, Alive: {game_state.alive}, Dead: {game_state.dead}, FPS: {fps}"
-#     )
+from screen import Action, Game
 
 
 async def main():
     game = Game("lidouglas@gmail.com", "mzk-drw-krd3EVP5axn", show_screen=True)
     await game.launch()
-    await game.start_game()
+    await game.login()
+    await game.create_match()
+    await game.start_match()
+
     while True:
-        state = game.state
-        fps = game.fps
-        logger.info(
-            f"Score: {state.score}, Alive: {state.alive}, Dead: {state.dead}, FPS: {fps}"
-        )
-        if state.alive:
-            action = random.randint(0, 4)
+        await game.wait_for_alive()
+
+        total_reward = 0
+        done = False
+        while not done:
+            action = random.randint(0, 2)
+
             start_time = time.time()
-            await game.set_action(Action(action))
+            reward, done = await game.step(Action(action))
             end_time = time.time()
             logger.warning(
                 f"Action: {Action(action).name}, Time: {end_time - start_time}"
             )
-        await asyncio.sleep(1 / 60)
 
-    await game.close()
+            total_reward += reward
+
+            # Log what's going on
+            player = game.player
+            fps = game.fps
+            logger.info(
+                f"Score: {player.score}, Alive: {player.alive}, Dead: {player.dead}, FPS: {round(fps)}, Total Reward: {total_reward}"
+            )
 
 
 asyncio.run(main())

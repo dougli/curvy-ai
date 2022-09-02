@@ -4,7 +4,7 @@ import numpy as np
 from PIL import Image
 from tesserocr import PyTessBaseAPI
 
-from .types import GameState, Rect
+from .types import Player, Rect
 
 sct = mss.mss()
 
@@ -70,7 +70,7 @@ class Screen:
         image = np.clip((image - IN_BLACK) / (IN_WHITE - IN_BLACK), 0, 255)  # type: ignore
         return image
 
-    def game_state(self) -> GameState:
+    def game_state(self) -> Player:
         # Grab the scoring region
         image = self.image[
             self.scoring_region.y : self.scoring_region.y + self.scoring_region.h,
@@ -80,11 +80,11 @@ class Screen:
         # Returns a one-hot vector of the player index if alive, otherwise a zero vector
         is_alive, score = self._check_state(image, SCORE_ALIVE_COLOR)
         if is_alive:
-            return GameState(score, alive=True, dead=False)
+            return Player(score, alive=True, dead=False)
         is_dead, score = self._check_state(image, SCORE_DEAD_COLOR)
         if is_dead:
-            return GameState(score, alive=False, dead=True)
-        return GameState(-1, alive=False, dead=False)
+            return Player(score, alive=False, dead=True)
+        return Player(-1, alive=False, dead=False)
 
     def _check_state(self, image, color) -> tuple[bool, int]:
         """Returns a tuple, where the first element is True if the player is in that

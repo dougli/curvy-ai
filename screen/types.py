@@ -6,7 +6,7 @@ Rect = NamedTuple("Rect", [("x", int), ("y", int), ("w", int), ("h", int)])
 
 
 @dataclass
-class GameState:
+class Player:
     score: int
     alive: bool
     dead: bool
@@ -14,10 +14,10 @@ class GameState:
 
 class Action(IntEnum):
     NOTHING = 0
-    UP = 1
-    DOWN = 2
-    LEFT = 3
-    RIGHT = 4
+    LEFT = 1
+    RIGHT = 2
+    # UP = 3
+    # DOWN = 4
 
     @property
     def key(self) -> Optional[str]:
@@ -26,8 +26,8 @@ class Action(IntEnum):
 
 ACTION_TO_KEY: dict[Action, Optional[str]] = {
     Action.NOTHING: None,
-    Action.UP: "w",
-    Action.DOWN: "s",
     Action.LEFT: "a",
     Action.RIGHT: "d",
+    # Action.UP: "w",
+    # Action.DOWN: "s",
 }
