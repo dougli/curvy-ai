@@ -1,164 +1,172 @@
+import multiprocessing as mp
+
 import numpy as np
-import torch
+import torch as T
+import torch.optim as optim
+
+from agent.net import CurvyNet
 
 
-class Memory:
-    def __init__(self, device: torch.device):
-        self.device = device
-        self.clear()
-
-    def remember(self, state, action, probs, values, reward: float, done: bool):
-        self.states.append(state)
-        self.actions.append(action.unsqueeze(1).to(self.device))
-        self.values.append(values)
-        self.log_probs.append(probs.unsqueeze(1).to(self.device))
-        self.rewards.append(torch.FloatTensor([reward]).unsqueeze(1).to(self.device))
-        self.masks.append(torch.FloatTensor([1 - done]).unsqueeze(1).to(self.device))
-
-    def clear(self):
+class PPOMemory:
+    def __init__(self, minibatch_size):
         self.states = []
+        self.probs = []
+        self.vals = []
         self.actions = []
-        self.values = []
-        self.log_probs = []
         self.rewards = []
-        self.masks = []
+        self.dones = []
 
-    def compute_gae(self, next_value: float, gamma: float, gae_lambda: float):
-        """Compute the generalized advantage estimator. The generalized advantage
-        estimator is an estimate of the advantage of state s_t, which suggests how
-        much better s_t is than the previous state s_t-1.
+        self.batch_size = minibatch_size
 
-        It uses a calculation of discounted future rewards, where the discounted
-        future rewards are calculated as:
-            discounted_future_rewards = reward + gamma * next_value
-        The advantage is then calculated as:
-            advantage = discounted_future_rewards - value
-        """
-        values = self.values + [next_value]
-        gae = 0
-        returns = []
-        for step in reversed(range(len(self.rewards))):
-            delta = (
-                self.rewards[step]
-                + gamma * values[step + 1] * self.masks[step]
-                - values[step]
-            )
-            gae = delta + gamma * gae_lambda * self.masks[step] * gae
-            returns.insert(0, gae + values[step])
-        return returns
-
-    def export_for_learning(self, next_value, gamma, gae_lambda):
-        returns = self.compute_gae(next_value, gamma, gae_lambda)
-        returns = torch.cat(returns).detach()
-        values = torch.cat(self.values).detach()
-        advantage = returns - values
-        result = Batch(
-            torch.cat(self.states),
-            torch.cat(self.actions),
-            torch.cat(self.log_probs).detach(),
-            returns,
-            advantage,
-        )
-        self.clear()
-        return result
-
-
-class Batch:
-    def __init__(self, states, actions, log_probs, returns, advantage):
-        self.states = states
-        self.actions = actions
-        self.log_probs = log_probs
-        self.returns = returns
-        self.advantage = advantage
-
-    def generate_minibatch(self, minibatch_size):
-        """Generate a minibatch for learning. Continues to yield results until all
-        data is used up."""
-        batch_size = self.states.size(0)
-        assert batch_size % minibatch_size == 0
-
-        indices = np.arange(batch_size)
+    def generate_batches(self):
+        n_states = len(self.states)
+        batch_start = np.arange(0, n_states, self.batch_size)
+        indices = np.arange(n_states, dtype=np.int32)
         np.random.shuffle(indices)
-        for start in range(0, batch_size, minibatch_size):
-            end = start + minibatch_size
-            ids = indices[start:end]
-            # rand_ids = np.random.randint(0, batch_size, min(minibatch_size, batch_size))
-            yield (
-                self.states[ids, :],
-                self.actions[ids, :],
-                self.log_probs[ids, :],
-                self.returns[ids, :],
-                self.advantage[ids, :],
-            )
+        batches = [indices[i : i + self.batch_size] for i in batch_start]
+
+        return (
+            np.array(self.states),
+            np.array(self.actions),
+            np.array(self.probs),
+            np.array(self.vals),
+            np.array(self.rewards),
+            np.array(self.dones),
+            batches,
+        )
+
+    def store_memory(self, state, action, probs, vals, reward, done):
+        self.states.append(state)
+        self.actions.append(action)
+        self.probs.append(probs)
+        self.vals.append(vals)
+        self.rewards.append(reward)
+        self.dones.append(done)
+
+    def clear_memory(self):
+        self.states = []
+        self.probs = []
+        self.actions = []
+        self.rewards = []
+        self.dones = []
+        self.vals = []
 
 
 class Agent:
-    def __init__(self, model: torch.nn.Module, device: torch.device) -> None:
+    def __init__(
+        self,
+        *,
+        device: T.device,
+        n_actions,
+        input_shape,
+        gamma=0.99,
+        alpha=0.0003,
+        gae_lambda=0.95,
+        policy_clip=0.2,
+        minibatch_size=64,
+        n_epochs=10,
+        vf_coeff=0.5,
+        entropy_coeff=0.01,
+    ):
+        self.gamma = gamma
+        self.policy_clip = policy_clip
+        self.n_epochs = n_epochs
+        self.gae_lambda = gae_lambda
+        self.vf_coeff = vf_coeff
+        self.entropy_coeff = entropy_coeff
 
-        # ----------------------------------------------------------------------
-        # ATARI parameters
-        # ----------------------------------------------------------------------
-        # self.lr = 2.5e-4  # Learning rate (Adam stepsize)
-        # self.epochs = 3  # Number of epochs to train per update
-        # self.minibatch_size = 32  # Number of samples per minibatch
-        # self.gamma = 0.99  # Discount factor
-        # self.tau = 0.95  # Generalized advantage estimation factor (GAE)
-        # self.epsilon = 0.1  # Clipping parameter for PPO
-        # self.c1 = 1  # C1 hyperparameter for value loss
-        # self.c2 = 0.01  # C2 hyperparameter for entropy bonus
+        self.model = CurvyNet((1, *input_shape), n_actions).to(device)
+        self.memory = PPOMemory(minibatch_size)
+        self.device = device
 
-        # ----------------------------------------------------------------------
-        # Cartpole parameters
-        # ----------------------------------------------------------------------
-        self.lr = 0.0003  # Learning rate (Adam stepsize)
-        self.epsilon = 0.2
-        self.c1 = 0.5
-        self.c2 = 0.00
-        self.epochs = 4
-        self.gamma = 0.99
-        self.gae_lambda = 0.95
-        self.minibatch_size = 5
+        self.optimizer = optim.Adam(self.model.parameters(), lr=alpha)
 
-        self.model = model
-        self.optimizer = torch.optim.Adam(model.parameters(), lr=self.lr)
-        self.memory = Memory(device)
+    def remember(self, state, action, probs, vals, reward, done):
+        self.memory.store_memory(state, action, probs, vals, reward, done)
 
-    def remember(self, state, action, probs, values, reward, done):
-        self.memory.remember(state, action, probs, values, reward, done)
+    def save_models(self):
+        print("Saving models...")
+        self.model.save_checkpoint()
 
-    def learn(self, next_state: torch.Tensor):
-        _, next_value = self.act(next_state)
-        batch = self.memory.export_for_learning(next_value, self.gamma, self.gae_lambda)
-        self.ppo_update(batch)
+    def load_models(self):
+        print("Loading models ...")
+        self.model.load_checkpoint()
 
-    def ppo_update(self, batch: Batch):
-        for _ in range(self.epochs):
-            for (
-                state,
-                action,
-                old_log_probs,
-                return_,
-                advantage,
-            ) in batch.generate_minibatch(self.minibatch_size):
-                dist, value = self.model(state)
-                entropy = dist.entropy().mean()
-                new_log_probs = dist.log_prob(action)
+    def choose_action(self, observation):
+        state = T.tensor([observation], dtype=T.float32).to(self.device)
 
-                ratio = (new_log_probs - old_log_probs).exp()
-                surr1 = ratio * advantage
-                surr2 = (
-                    torch.clamp(ratio, 1.0 - self.epsilon, 1.0 + self.epsilon)
-                    * advantage
+        dist, value = self.model(state)
+        action = dist.sample()
+
+        probs = T.squeeze(dist.log_prob(action)).item()
+        action = T.squeeze(action).item()
+        value = T.squeeze(value).item()
+
+        return action, probs, value
+
+    def learn(self):
+        for _ in range(self.n_epochs):
+            (
+                state_arr,
+                action_arr,
+                old_prob_arr,
+                vals_arr,
+                reward_arr,
+                dones_arr,
+                batches,
+            ) = self.memory.generate_batches()
+
+            values = vals_arr
+            advantage = np.zeros(len(reward_arr), dtype=np.float32)
+
+            for t in range(len(reward_arr) - 1):
+                discount = 1
+                a_t = 0
+                for k in range(t, len(reward_arr) - 1):
+                    a_t += discount * (
+                        reward_arr[k]
+                        + self.gamma * values[k + 1] * (1 - int(dones_arr[k]))
+                        - values[k]
+                    )
+                    discount *= self.gamma * self.gae_lambda
+                advantage[t] = a_t
+            advantage = T.tensor(advantage).to(self.device)
+
+            values = T.tensor(values, dtype=T.float32).to(self.device)
+            for batch in batches:
+                states = T.tensor(state_arr[batch], dtype=T.float32).to(self.device)
+                old_probs = T.tensor(old_prob_arr[batch], dtype=T.float32).to(
+                    self.device
                 )
+                actions = T.tensor(action_arr[batch], dtype=T.float32).to(self.device)
 
-                actor_loss = -torch.min(surr1, surr2).mean()
-                critic_loss = (return_ - value).pow(2).mean()
-                loss = self.c1 * critic_loss + actor_loss - self.c2 * entropy
+                dist, critic_value = self.model(states)
+
+                critic_value = T.squeeze(critic_value)
+
+                new_probs = dist.log_prob(actions)
+                prob_ratio = new_probs.exp() / old_probs.exp()
+                # prob_ratio = (new_probs - old_probs).exp()
+                weighted_probs = advantage[batch] * prob_ratio
+                weighted_clipped_probs = (
+                    T.clamp(prob_ratio, 1 - self.policy_clip, 1 + self.policy_clip)
+                    * advantage[batch]
+                )
+                actor_loss = -T.min(weighted_probs, weighted_clipped_probs).mean()
+
+                entropy = dist.entropy().mean()
+
+                returns = advantage[batch] + values[batch]
+                critic_loss = (returns - critic_value) ** 2
+                critic_loss = critic_loss.mean()
+
+                total_loss = (
+                    actor_loss
+                    + self.vf_coeff * critic_loss
+                    - self.entropy_coeff * entropy
+                )
                 self.optimizer.zero_grad()
-                loss.backward()
+                total_loss.backward()
                 self.optimizer.step()
 
-    def act(
-        self, state: torch.Tensor
-    ) -> tuple[torch.distributions.Categorical, torch.Tensor]:
-        return self.model(state)
+        self.memory.clear_memory()

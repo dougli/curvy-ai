@@ -23,9 +23,6 @@ import pyppeteer
 from pyppeteer import launch
 from pyppeteer.page import Page
 
-CURVE_FEVER = "https://curvefever.pro"
-WEB_GL_GAME = "https://playcanv.as/p/LwskqxXT/"
-
 VIEWPORT = {"width": 1280, "height": 720}
 
 # Identifies the play area
@@ -76,7 +73,7 @@ class Game:
         self.screen_lock = asyncio.Condition()
         self.score = INITIAL_SCORE
 
-    async def launch(self):
+    async def launch(self, url: str) -> None:
         args = pyppeteer.defaultArgs({"headless": self.headless})
         args.append("--use-gl=egl")
 
@@ -100,9 +97,8 @@ class Game:
             },
         )
 
-        # await self.page.goto(WEB_GL_GAME)
-        logger.info("Loading Curve Fever Pro...")
-        await self.page.goto(CURVE_FEVER)
+        logger.info("Loading URL...")
+        await self.page.goto(url)
 
     async def login(self) -> None:
         # Click the "SIGN IN" link.

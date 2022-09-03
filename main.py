@@ -1,17 +1,20 @@
 import asyncio
 import json
-import time
 
 import numpy as np
 import torch
 import torch.backends.mps
-import torchvision.transforms as transforms
 
 import logger
-from ppo_torch import Agent
+from agent import Agent
 from screen import INPUT_SHAPE, Action, Game
 
+CURVE_FEVER = "https://curvefever.pro"
+WEB_GL_GAME = "https://playcanv.as/p/LwskqxXT/"
+
+
 REWARD_HISTORY_FILE = "out/reward_history.json"
+
 
 # Hyperparameters
 horizon = 128
@@ -31,16 +34,13 @@ def init_device():
     if cuda:
         print("Using CUDA")
         device = torch.device("cuda")
-    elif mps:
-        print("Using MPS")
-        device = torch.device("mps")
+    # elif mps:
+    #     print("Using MPS")
+    #     device = torch.device("mps")
     else:
         print("Using CPU")
         device = torch.device("cpu")
     return device
-
-
-transform = transforms.ToTensor()
 
 
 async def main():
@@ -57,14 +57,14 @@ async def main():
         vf_coeff=vf_coeff,
         entropy_coeff=entropy_coeff,
     )
+    agent.load_models()
 
     game = Game("lidouglas@gmail.com", "mzk-drw-krd3EVP5axn", show_screen=True)
-    await game.launch()
+    await game.launch(CURVE_FEVER)
     await game.login()
     await game.create_match()
     await game.start_match()
 
-    # best_score = 0
     reward_history = []
 
     n_steps = 0
@@ -86,9 +86,7 @@ async def main():
             agent.remember(state, action, prob, value, reward, done)
 
             if n_steps % horizon == 0:
-                start_time = time.time()
                 agent.learn()
-                logger.success(f"Learned in {time.time() - start_time:.2f}s")
                 learn_iters += 1
 
         reward_history.append(total_reward)
@@ -98,8 +96,6 @@ async def main():
             f"Episode {episode}, reward: {round(total_reward, 3)}, Avg Score: {round(avg_score, 3)}, Time Steps: {n_steps}, Learn Iters: {learn_iters}"
         )
 
-        # if avg_score > best_score:
-        #     best_score = avg_score
         agent.save_models()
 
         with open(REWARD_HISTORY_FILE, "w") as f:
