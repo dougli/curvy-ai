@@ -1,75 +1,43 @@
 import asyncio
 import json
+from multiprocessing import freeze_support
 
 import numpy as np
 import torch
-import torch.backends.mps
 
 import logger
-from agent import Agent
+from agent import CurvyNet
 from screen import INPUT_SHAPE, Action, Game
+from trainer import TrainerProcess
 
 CURVE_FEVER = "https://curvefever.pro"
 WEB_GL_GAME = "https://playcanv.as/p/LwskqxXT/"
 
-
 REWARD_HISTORY_FILE = "out/reward_history.json"
 
-
-# Hyperparameters
-horizon = 128
-lr = 0.0003
-n_epochs = 3
-minibatch_size = 32
-gamma = 0.99
-gae_lambda = 0.95
-policy_clip = 0.1
-vf_coeff = 1
-entropy_coeff = 0.01
-
-
-def init_device():
-    cuda = torch.cuda.is_available()  # Nvidia GPU
-    mps = torch.backends.mps.is_available()  # M1 processors
-    if cuda:
-        print("Using CUDA")
-        device = torch.device("cuda")
-    # elif mps:
-    #     print("Using MPS")
-    #     device = torch.device("mps")
-    else:
-        print("Using CPU")
-        device = torch.device("cpu")
-    return device
+N_GAME_THREADS = 4
 
 
 async def main():
-    agent = Agent(
-        device=init_device(),
-        n_actions=len(Action),
-        input_shape=INPUT_SHAPE,
-        gamma=gamma,
-        gae_lambda=gae_lambda,
-        policy_clip=policy_clip,
-        minibatch_size=minibatch_size,
-        n_epochs=n_epochs,
-        alpha=lr,
-        vf_coeff=vf_coeff,
-        entropy_coeff=entropy_coeff,
-    )
-    agent.load_models()
+    cpu = torch.device("cpu")
+    torch.set_num_threads(N_GAME_THREADS)
+
+    model = CurvyNet((1, *INPUT_SHAPE), len(Action)).to(cpu)
+    model.load_checkpoint()
+
+    trainer = TrainerProcess(on_model_update=model.load_checkpoint)
 
     game = Game("lidouglas@gmail.com", "mzk-drw-krd3EVP5axn", show_screen=True)
     await game.launch(CURVE_FEVER)
     await game.login()
     await game.create_match()
     await game.start_match()
+    # await game.launch(WEB_GL_GAME)
 
     reward_history = []
 
     n_steps = 0
     avg_score = 0
-    learn_iters = 0
 
     for episode in range(10000):
         await game.wait_for_alive()
@@ -78,28 +46,26 @@ async def main():
         done = False
         while not done:
             state = game.play_area
-            action, prob, value = agent.choose_action(state)
+            torch_state = torch.tensor([state], dtype=torch.float32).to(cpu)
+            action, prob, value = model.choose_action(torch_state)
             reward, done = await game.step(Action(action))
 
             n_steps += 1
             total_reward += reward
-            agent.remember(state, action, prob, value, reward, done)
-
-            if n_steps % horizon == 0:
-                agent.learn()
-                learn_iters += 1
+            trainer.remember(state, action, prob, value, reward, done)
+            await asyncio.sleep(0.05)
 
         reward_history.append(total_reward)
         avg_score = np.mean(reward_history[-100:])
 
         logger.info(
-            f"Episode {episode}, reward: {round(total_reward, 3)}, Avg Score: {round(avg_score, 3)}, Time Steps: {n_steps}, Learn Iters: {learn_iters}"
+            f"Episode {episode}, reward: {round(total_reward, 3)}, Avg Score: {round(avg_score, 3)}, Time Steps: {n_steps}"
         )
-
-        agent.save_models()
 
         with open(REWARD_HISTORY_FILE, "w") as f:
             json.dump(reward_history, f)
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    freeze_support()
+    asyncio.run(main())

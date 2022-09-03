@@ -42,7 +42,7 @@ SCORE_STATE_THRESHOLD = 205
 IN_BLACK = 60
 IN_WHITE = 255
 
-REWARD_ALIVE_BONUS = 0.001  # Small bonus every frame for staying alive
+REWARD_ALIVE_PER_SEC = 0.01  # Small bonus every second for staying alive
 REWARD_DEAD_PENALTY = 0  # Penalty for dying
 
 FPS_COUNTER_SIZE = 10
@@ -72,6 +72,7 @@ class Game:
         self.frame_id = 0
         self.screen_lock = asyncio.Condition()
         self.score = INITIAL_SCORE
+        self.last_reward_time = 0
 
     async def launch(self, url: str) -> None:
         args = pyppeteer.defaultArgs({"headless": self.headless})
@@ -295,9 +296,13 @@ class Game:
         next_state = self.player
 
         # Calculate the reward
+        now = time.time()
+        elapsed = now - self.last_reward_time
+        self.last_reward_time = now
+
         score_reward = 0
         alive_reward = (
-            next_state.alive * REWARD_ALIVE_BONUS
+            next_state.alive * REWARD_ALIVE_PER_SEC * elapsed
             + next_state.dead * REWARD_DEAD_PENALTY
         )
 
@@ -313,6 +318,7 @@ class Game:
         while True:
             player = self.player
             if player.alive:
+                self.last_reward_time = time.time()
                 return
 
             # Wait for a new frame

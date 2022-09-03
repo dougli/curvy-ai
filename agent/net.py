@@ -1,5 +1,6 @@
 import os
 
+import logger
 import numpy as np
 import torch
 from torch import nn
@@ -48,10 +49,25 @@ class CurvyNet(nn.Module):
         dist = torch.distributions.Categorical(dist)
         return dist, value
 
+    def choose_action(self, state):
+        dist, value = self(state)
+        action = dist.sample()
+
+        probs = torch.squeeze(dist.log_prob(action)).item()
+        action = torch.squeeze(action).item()
+        value = torch.squeeze(value).item()
+
+        return action, probs, value
+
     def save_checkpoint(self):
-        os.path.join(os.path.dirname(__file__), CHECKPOINT_FILE)
-        torch.save(self.state_dict(), CHECKPOINT_FILE)
+        filename = os.path.join(os.path.dirname(__file__), "..", CHECKPOINT_FILE)
+        logger.success(f"Saving checkpoint to {filename}")
+        torch.save(self.state_dict(), filename)
 
     def load_checkpoint(self):
-        return
-        # self.load_state_dict(torch.load(CHECKPOINT_FILE))
+        filename = os.path.join(os.path.dirname(__file__), "..", CHECKPOINT_FILE)
+        if os.path.exists(filename):
+            logger.success(f"Loading checkpoint from {filename}")
+            self.load_state_dict(torch.load(filename))
+        else:
+            logger.warning(f"Checkpoint file {filename} not found")

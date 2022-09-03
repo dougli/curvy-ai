@@ -59,14 +59,14 @@ class Agent:
         device: T.device,
         n_actions,
         input_shape,
-        gamma=0.99,
-        alpha=0.0003,
-        gae_lambda=0.95,
-        policy_clip=0.2,
-        minibatch_size=64,
-        n_epochs=10,
-        vf_coeff=0.5,
-        entropy_coeff=0.01,
+        gamma: float,
+        alpha: float,
+        gae_lambda: float,
+        policy_clip: float,
+        minibatch_size: int,
+        n_epochs: int,
+        vf_coeff: float,
+        entropy_coeff: float,
     ):
         self.gamma = gamma
         self.policy_clip = policy_clip
@@ -85,24 +85,10 @@ class Agent:
         self.memory.store_memory(state, action, probs, vals, reward, done)
 
     def save_models(self):
-        print("Saving models...")
         self.model.save_checkpoint()
 
     def load_models(self):
-        print("Loading models ...")
         self.model.load_checkpoint()
-
-    def choose_action(self, observation):
-        state = T.tensor([observation], dtype=T.float32).to(self.device)
-
-        dist, value = self.model(state)
-        action = dist.sample()
-
-        probs = T.squeeze(dist.log_prob(action)).item()
-        action = T.squeeze(action).item()
-        value = T.squeeze(value).item()
-
-        return action, probs, value
 
     def learn(self):
         for _ in range(self.n_epochs):
