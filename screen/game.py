@@ -28,9 +28,11 @@ WEB_GL_GAME = "https://playcanv.as/p/LwskqxXT/"
 
 VIEWPORT = {"width": 1280, "height": 720}
 
+# Identifies the play area
 PLAY_AREA = Rect(x=200, y=0, w=1080, h=720)
-PLAY_AREA_RESIZED = (144, 216)
+PLAY_AREA_RESIZED = (180, 270)
 
+# Identifies the scoring area
 INITIAL_SCORE = 10
 SCORE_HEIGHT = 27
 SCORE_AREA = Rect(x=170, y=43, w=25, h=SCORE_HEIGHT * 8)
@@ -38,6 +40,10 @@ SCORE_ALIVE_COLOR = np.array([60, 46, 39], dtype=np.float32)  # 272e3c
 SCORE_DEAD_COLOR = np.array([43, 27, 22], dtype=np.float32)  # 161b2b
 SCORE_BACKGROUND_COLOR = np.array([36, 19, 14], dtype=np.float32)  # 0e1324
 SCORE_STATE_THRESHOLD = 205
+
+# Color clipping so we get a clean image as opposed to the blue morphy background
+IN_BLACK = 60
+IN_WHITE = 255
 
 REWARD_ALIVE_BONUS = 0.001  # Small bonus every frame for staying alive
 REWARD_DEAD_PENALTY = 0  # Penalty for dying
@@ -174,20 +180,31 @@ class Game:
     def play_area(self) -> Optional[np.ndarray]:
         screen = self.screen
         if screen is not None:
+            # Crop
             image = screen[
                 PLAY_AREA.y : PLAY_AREA.y + PLAY_AREA.h,
                 PLAY_AREA.x : PLAY_AREA.x + PLAY_AREA.w,
             ]
 
+            # Convert to grayscale
             image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
+            # Resize
             image = (
-                image.reshape(PLAY_AREA_RESIZED[0], 5, PLAY_AREA_RESIZED[1], 5)
+                image.reshape(PLAY_AREA_RESIZED[0], 4, PLAY_AREA_RESIZED[1], 4)
                 .mean(-1, dtype=np.float32)
                 .mean(1, dtype=np.float32)
-                .astype(np.uint8)
             )
 
+            # Clip away the background
+            image = np.clip(
+                (image - IN_BLACK) * (255.0 / (IN_WHITE - IN_BLACK)), 0, 255.0
+            )
+
+            # Rescale to 0-1 and return as 3D array (for compatibility with the
+            # neural network).
+            image = image / 255.0
+            image = np.expand_dims(image, axis=(0))
             return image
         return None
 

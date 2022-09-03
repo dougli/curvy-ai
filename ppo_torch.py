@@ -1,16 +1,14 @@
-import os
+import time
 
 import numpy as np
 import torch as T
-import torch.nn as nn
 import torch.optim as optim
-from torch.distributions.categorical import Categorical
 
 from agent.net import CurvyNet
 
 
 class PPOMemory:
-    def __init__(self, batch_size):
+    def __init__(self, minibatch_size):
         self.states = []
         self.probs = []
         self.vals = []
@@ -18,12 +16,12 @@ class PPOMemory:
         self.rewards = []
         self.dones = []
 
-        self.batch_size = batch_size
+        self.batch_size = minibatch_size
 
     def generate_batches(self):
         n_states = len(self.states)
         batch_start = np.arange(0, n_states, self.batch_size)
-        indices = np.arange(n_states, dtype=np.int64)
+        indices = np.arange(n_states, dtype=np.int32)
         np.random.shuffle(indices)
         batches = [indices[i : i + self.batch_size] for i in batch_start]
 
@@ -57,43 +55,47 @@ class PPOMemory:
 class Agent:
     def __init__(
         self,
+        *,
         device: T.device,
         n_actions,
-        input_dims,
+        input_shape,
         gamma=0.99,
         alpha=0.0003,
         gae_lambda=0.95,
         policy_clip=0.2,
-        batch_size=64,
+        minibatch_size=64,
         n_epochs=10,
+        vf_coeff=0.5,
+        entropy_coeff=0.01,
     ):
         self.gamma = gamma
         self.policy_clip = policy_clip
         self.n_epochs = n_epochs
         self.gae_lambda = gae_lambda
+        self.vf_coeff = vf_coeff
+        self.entropy_coeff = entropy_coeff
 
-        self.actor = CurvyNet(4, 256, n_actions).to(T.device("cpu"))
-        self.memory = PPOMemory(batch_size)
-
+        self.model = CurvyNet((1, *input_shape), n_actions).to(device)
+        self.memory = PPOMemory(minibatch_size)
         self.device = device
 
-        self.optimizer = optim.Adam(self.actor.parameters(), lr=alpha)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=alpha)
 
     def remember(self, state, action, probs, vals, reward, done):
         self.memory.store_memory(state, action, probs, vals, reward, done)
 
     def save_models(self):
-        print("... saving models ...")
-        self.actor.save_checkpoint()
+        print("Saving models...")
+        self.model.save_checkpoint()
 
     def load_models(self):
         print("... loading models ...")
-        self.actor.load_checkpoint()
+        self.model.load_checkpoint()
 
     def choose_action(self, observation):
-        state = T.tensor([observation], dtype=T.float).to(self.device)
+        state = T.tensor([observation], dtype=T.float32).to(self.device)
 
-        dist, value = self.actor(state)
+        dist, value = self.model(state)
         action = dist.sample()
 
         probs = T.squeeze(dist.log_prob(action)).item()
@@ -130,13 +132,15 @@ class Agent:
                 advantage[t] = a_t
             advantage = T.tensor(advantage).to(self.device)
 
-            values = T.tensor(values).to(self.device)
+            values = T.tensor(values, dtype=T.float32).to(self.device)
             for batch in batches:
-                states = T.tensor(state_arr[batch], dtype=T.float).to(self.device)
-                old_probs = T.tensor(old_prob_arr[batch]).to(self.device)
-                actions = T.tensor(action_arr[batch]).to(self.device)
+                states = T.tensor(state_arr[batch], dtype=T.float32).to(self.device)
+                old_probs = T.tensor(old_prob_arr[batch], dtype=T.float32).to(
+                    self.device
+                )
+                actions = T.tensor(action_arr[batch], dtype=T.float32).to(self.device)
 
-                dist, critic_value = self.actor(states)
+                dist, critic_value = self.model(states)
 
                 critic_value = T.squeeze(critic_value)
 
@@ -156,7 +160,11 @@ class Agent:
                 critic_loss = (returns - critic_value) ** 2
                 critic_loss = critic_loss.mean()
 
-                total_loss = actor_loss + 0.5 * critic_loss - 0.001 * entropy
+                total_loss = (
+                    actor_loss
+                    + self.vf_coeff * critic_loss
+                    - self.entropy_coeff * entropy
+                )
                 self.optimizer.zero_grad()
                 total_loss.backward()
                 self.optimizer.step()

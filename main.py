@@ -1,102 +1,109 @@
 import asyncio
-import random
+import json
 import time
 
+import numpy as np
+import torch
+import torch.backends.mps
+import torchvision.transforms as transforms
+
 import logger
-from screen import Action, Game
+from ppo_torch import Agent
+from screen import INPUT_SHAPE, Action, Game
+
+REWARD_HISTORY_FILE = "out/reward_history.json"
+
+# Hyperparameters
+horizon = 128
+lr = 0.0003
+n_epochs = 3
+minibatch_size = 32
+gamma = 0.99
+gae_lambda = 0.95
+policy_clip = 0.1
+vf_coeff = 1
+entropy_coeff = 0.01
+
+
+def init_device():
+    cuda = torch.cuda.is_available()  # Nvidia GPU
+    mps = torch.backends.mps.is_available()  # M1 processors
+    if cuda:
+        print("Using CUDA")
+        device = torch.device("cuda")
+    elif mps:
+        print("Using MPS")
+        device = torch.device("mps")
+    else:
+        print("Using CPU")
+        device = torch.device("cpu")
+    return device
+
+
+transform = transforms.ToTensor()
 
 
 async def main():
+    agent = Agent(
+        device=init_device(),
+        n_actions=len(Action),
+        input_shape=INPUT_SHAPE,
+        gamma=gamma,
+        gae_lambda=gae_lambda,
+        policy_clip=policy_clip,
+        minibatch_size=minibatch_size,
+        n_epochs=n_epochs,
+        alpha=lr,
+        vf_coeff=vf_coeff,
+        entropy_coeff=entropy_coeff,
+    )
+
     game = Game("lidouglas@gmail.com", "mzk-drw-krd3EVP5axn", show_screen=True)
     await game.launch()
     await game.login()
     await game.create_match()
     await game.start_match()
 
-    while True:
+    # best_score = 0
+    reward_history = []
+
+    n_steps = 0
+    avg_score = 0
+    learn_iters = 0
+
+    for episode in range(10000):
         await game.wait_for_alive()
 
         total_reward = 0
         done = False
         while not done:
-            action = random.randint(0, 2)
-
-            start_time = time.time()
+            state = game.play_area
+            action, prob, value = agent.choose_action(state)
             reward, done = await game.step(Action(action))
-            end_time = time.time()
-            logger.warning(
-                f"Action: {Action(action).name}, Time: {end_time - start_time}"
-            )
 
+            n_steps += 1
             total_reward += reward
+            agent.remember(state, action, prob, value, reward, done)
 
-            # Log what's going on
-            player = game.player
-            fps = game.fps
-            logger.info(
-                f"Score: {player.score}, Alive: {player.alive}, Dead: {player.dead}, FPS: {round(fps)}, Total Reward: {total_reward}"
-            )
+            if n_steps % horizon == 0:
+                start_time = time.time()
+                agent.learn()
+                logger.success(f"Learned in {time.time() - start_time:.2f}s")
+                learn_iters += 1
+
+        reward_history.append(total_reward)
+        avg_score = np.mean(reward_history[-100:])
+
+        logger.info(
+            f"Episode {episode}, reward: {round(total_reward, 3)}, Avg Score: {round(avg_score, 3)}, Time Steps: {n_steps}, Learn Iters: {learn_iters}"
+        )
+
+        # if avg_score > best_score:
+        #     best_score = avg_score
+        agent.save_models()
+
+        with open(REWARD_HISTORY_FILE, "w") as f:
+            json.dump(reward_history, f)
 
 
 asyncio.run(main())
-
-# env = gym.make("CartPole-v1", new_step_api=True)
-
-
-# def init_device():
-#     cuda = torch.cuda.is_available()  # Nvidia GPU
-#     mps = torch.backends.mps.is_available()  # M1 processors
-#     if cuda:
-#         print("Using CUDA")
-#         device = torch.device("cuda")
-#     # elif mps:
-#     #     print("Using MPS")
-#     #     device = torch.device("mps")
-#     else:
-#         print("Using CPU")
-#         device = torch.device("cpu")
-#     return device
-
-
-# T = 20
-
-
-# def run(device):
-#     iteration = 0
-#     state = env.reset()
-#     next_state = None
-#     total_reward = 0
-#     steps = 0
-#     learned_steps = 0
-
-#     while iteration < 10000:
-#         state = torch.FloatTensor(state).unsqueeze(0).to(device)
-#         dist, value = agent.act(state)
-#         action = dist.sample()
-#         next_state, reward, term, trunc, info = env.step(action.item())  # type: ignore
-#         done = bool(term or trunc)
-#         agent.remember(state, action, dist.log_prob(action), value, reward, done)
-#         total_reward += reward
-#         state = env.reset() if done else next_state
-
-#         steps += 1
-
-#         if done:
-#             print(
-#                 f"Iteration: {iteration}, Reward: {total_reward}, Learning steps: {learned_steps}"
-#             )
-#             iteration += 1
-#             total_reward = 0
-
-#         if steps % T == 0:
-#             next_state = torch.FloatTensor(next_state).unsqueeze(0).to(device)
-#             agent.learn(next_state)
-#             steps = 0
-#             learned_steps += 1
-
-
-# device = init_device()
-# model = CurvyNet(4, 24, 2)
-# model.to(device)
-# agent = Agent(model, device)
-# run(device)

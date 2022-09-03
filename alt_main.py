@@ -13,9 +13,9 @@ def init_device():
     if cuda:
         print("Using CUDA")
         device = torch.device("cuda")
-    # elif mps:
-    #     print("Using MPS")
-    #     device = torch.device("mps")
+    elif mps:
+        print("Using MPS")
+        device = torch.device("mps")
     else:
         print("Using CPU")
         device = torch.device("cpu")
@@ -31,10 +31,10 @@ if __name__ == "__main__":
     agent = Agent(
         device=init_device(),
         n_actions=2,
-        batch_size=batch_size,
+        minibatch_size=batch_size,
         alpha=alpha,
         n_epochs=n_epochs,
-        input_dims=env.observation_space.shape,
+        input_shape=env.observation_space.shape,
     )
     n_games = 300
 
