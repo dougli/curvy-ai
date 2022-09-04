@@ -24,16 +24,32 @@ import pyppeteer.errors
 from pyppeteer import launch
 from pyppeteer.page import Page
 
-VIEWPORT = {"width": 1280, "height": 720}
+# =================================================== 6x
+VIEWPORT = {"width": 1920, "height": 1080}
+PLAY_AREA = Rect(x=300, y=0, w=1620, h=1080)
+PLAY_AREA_SCALING_FACTOR = 6
+SCORE_HEIGHT = 41
+SCORE_AREA = Rect(x=253, y=66, w=41, h=SCORE_HEIGHT * 8)
 
-# Identifies the play area
-PLAY_AREA = Rect(x=200, y=0, w=1080, h=720)
+# =================================================== 5x
+# VIEWPORT = {"width": 1600, "height": 900}
+# PLAY_AREA_SCALING_FACTOR = 5
+# PLAY_AREA = Rect(x=250, y=0, w=1350, h=900)
+# SCORE_HEIGHT = 34
+# SCORE_AREA = Rect(x=211, y=55, w=34, h=SCORE_HEIGHT * 8)
+
+# =================================================== 4x
+# VIEWPORT = {"width": 1280, "height": 720}
+# PLAY_AREA = Rect(x=200, y=0, w=1080, h=720)
+# PLAY_AREA_SCALING_FACTOR = 4
+# SCORE_HEIGHT = 27
+# SCORE_AREA = Rect(x=170, y=43, w=25, h=SCORE_HEIGHT * 8)
+
 PLAY_AREA_RESIZED = (180, 270)
+assert PLAY_AREA.w / PLAY_AREA_SCALING_FACTOR == PLAY_AREA_RESIZED[1]
+assert PLAY_AREA.h / PLAY_AREA_SCALING_FACTOR == PLAY_AREA_RESIZED[0]
 
 # Identifies the scoring area
-INITIAL_SCORE = 10
-SCORE_HEIGHT = 27
-SCORE_AREA = Rect(x=170, y=43, w=25, h=SCORE_HEIGHT * 8)
 SCORE_ALIVE_COLOR = np.array([60, 46, 39], dtype=np.float32)  # 272e3c
 SCORE_DEAD_COLOR = np.array([43, 27, 22], dtype=np.float32)  # 161b2b
 SCORE_BACKGROUND_COLOR = np.array([36, 19, 14], dtype=np.float32)  # 0e1324
@@ -46,6 +62,7 @@ IN_WHITE = 255
 REWARD_ALIVE_PER_SEC = 0.01  # Small bonus every second for staying alive
 REWARD_DEAD_PENALTY = 0  # Penalty for dying
 
+INITIAL_SCORE = 10
 FPS_COUNTER_SIZE = 10
 
 MAX_ALIVE_WAIT_TIME = 15  # Seconds to wait for the game to start
@@ -70,11 +87,9 @@ class Game:
         self.show_screen = show_screen
         self.show_play_area = show_play_area
 
-        self.screen = None
         self.frame_times = collections.deque(maxlen=FPS_COUNTER_SIZE)
         self.current_action = Action.NOTHING
         self.in_play = False
-        self.frame_id = 0
         self.screen_lock = asyncio.Condition()
         self.score = INITIAL_SCORE
         self.last_reward_time = 0
@@ -96,10 +111,10 @@ class Game:
             "Page.startScreencast",
             {
                 "format": "jpeg",
-                "quality": 100,
+                "quality": 90,
                 "maxWidth": VIEWPORT["width"],
                 "maxHeight": VIEWPORT["height"],
-                "everyNthFrame": 1,
+                "everyNthFrame": 3,
             },
         )
 
@@ -197,7 +212,12 @@ class Game:
 
             # Resize
             image = (
-                image.reshape(PLAY_AREA_RESIZED[0], 4, PLAY_AREA_RESIZED[1], 4)
+                image.reshape(
+                    PLAY_AREA_RESIZED[0],
+                    PLAY_AREA_SCALING_FACTOR,
+                    PLAY_AREA_RESIZED[1],
+                    PLAY_AREA_SCALING_FACTOR,
+                )
                 .mean(-1, dtype=np.float32)
                 .mean(1, dtype=np.float32)
             )
@@ -207,8 +227,9 @@ class Game:
                 (image - IN_BLACK) * (255.0 / (IN_WHITE - IN_BLACK)), 0, 255.0
             )
 
-            cv2.imshow("image", image.astype(np.uint8))
-            cv2.waitKey(1)
+            if self.show_play_area:
+                cv2.imshow("image", image.astype(np.uint8))
+                cv2.waitKey(1)
 
             # Rescale to 0-1 and return as 3D array (for compatibility with the
             # neural network).
@@ -273,31 +294,6 @@ class Game:
         if not self.in_play:
             return 0, True
 
-        curr_state = self.player
-
-        if curr_state.dead:
-            return 0, True
-
-        if not curr_state.alive:
-            # If we are neither dead nor alive, we are in one of the following states:
-            #
-            # 1. The game is in play and we are alive, but the score ranking has changed
-            #    and for a few frames we cannot accurately determine the score or state.
-            #    This will only happen in multiplayer games.
-            #
-            # 2. The run has ended because everyone else has died. This will only happen
-            #    in multiplayer games.
-            #
-            # 3. The game has crashed, disconnected, or for whatever reason something
-            #    awful happened, and we are no longer in a game.
-            #
-            # 4. The game canvas has rendered the game but the game hasn't started yet.
-            #
-            # States 1 and 2 are only possible in multiplayer games. State 3 should be
-            # handled by _wait_for_game_end(), and state 4 should be handled by the
-            # caller, awaiting for wait_for_alive() before calling step().
-            pass
-
         # Perform the input
         await self.set_action(action)
 
@@ -323,7 +319,7 @@ class Game:
             self.score = next_state.score
         final_reward = score_reward + alive_reward
 
-        return final_reward, False
+        return final_reward, next_state.dead
 
     async def wait_for_alive(self):
         """Wait for the player to be alive."""
@@ -356,36 +352,40 @@ class Game:
         await self.cdp.detach()
         await self.browser.close()
 
+    @cached_property
+    def screen(self):
+        image = base64.b64decode(self._frame_data)
+        image = np.frombuffer(image, dtype=np.uint8)
+        image = cv2.imdecode(image, cv2.IMREAD_COLOR)
+        return image
+
     def _on_screencast_frame(self, params: dict[str, Any]) -> None:
-        self.frame_id += 1
         self.frame_times.append(time.time())
         self.cdp.send(
             "Page.screencastFrameAck",
             {"sessionId": params["sessionId"]},
         )
 
-        image = base64.b64decode(params["data"])
-        image = np.frombuffer(image, dtype=np.uint8)
-        image = cv2.imdecode(image, cv2.IMREAD_COLOR)
+        asyncio.ensure_future(self._update_frame(params["data"]))
 
-        asyncio.ensure_future(self._update_screen(image))
-
-    async def _update_screen(self, image) -> None:
+    async def _update_frame(self, frame_data) -> None:
         async with self.screen_lock:
-            self.screen = image
+            self._frame_data = frame_data
+            if hasattr(self, "screen"):
+                del self.screen
+            if hasattr(self, "player"):
+                del self.player
             self.screen_lock.notify_all()
-        if hasattr(self, "player"):
-            del self.player
 
         if self.show_screen:
-            cv2.imshow("Screen", image)
+            cv2.imshow("Screen", self.screen)
             cv2.waitKey(1)
 
     def _ocr_state(self, image, color) -> tuple[bool, int]:
         """Returns a tuple, where the first element is True if the player is in that
         state, and the second element is the player's score"""
         vertical_strip = image[:, -1:, :3]
-        mask = cv2.inRange(vertical_strip, color - 4, color + 4)
+        mask = cv2.inRange(vertical_strip, color - 6, color + 6)
         mask = cv2.resize(mask, (1, 8), interpolation=cv2.INTER_AREA)
         cv2.threshold(mask, SCORE_STATE_THRESHOLD, 1, cv2.THRESH_BINARY, mask)
         is_state = np.max(mask)

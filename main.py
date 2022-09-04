@@ -28,7 +28,7 @@ async def main():
 
     trainer = TrainerProcess(on_model_update=model.load_checkpoint)
 
-    game = Game("lidouglas@gmail.com", "mzk-drw-krd3EVP5axn", show_play_area=True)
+    game = Game("lidouglas@gmail.com", "mzk-drw-krd3EVP5axn")
     await game.launch(CURVE_FEVER)
     await game.login()
     await game.create_match()
@@ -54,7 +54,6 @@ async def main():
             torch_state = torch.tensor([state], dtype=torch.float32).to(cpu)
             action, prob, value = model.choose_action(torch_state)
             reward, done = await game.step(Action(action))
-
             n_steps += 1
             total_reward += reward
             trainer.remember(state, action, prob, value, reward, done)
@@ -63,7 +62,7 @@ async def main():
         avg_score = np.mean(reward_history[-100:])
 
         logger.info(
-            f"Episode {episode}, reward: {round(total_reward, 3)}, Avg Score: {round(avg_score, 3)}, Time Steps: {n_steps}"
+            f"Episode {episode}, reward {round(total_reward, 3)}, avg {round(avg_score, 3)}, steps {n_steps}, game score {game.player.score}"
         )
 
         with open(REWARD_HISTORY_FILE, "w") as f:
