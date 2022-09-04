@@ -13,15 +13,15 @@ from agent import Agent
 from screen import INPUT_SHAPE, Action
 
 # Hyperparameters
-horizon = 128
+horizon = 2048
 lr = 0.0003
-n_epochs = 3
-minibatch_size = 32
+n_epochs = 10
+minibatch_size = 64
 gamma = 0.99
 gae_lambda = 0.95
-policy_clip = 0.1
+policy_clip = 0.2
 vf_coeff = 1
-entropy_coeff = 0.01
+entropy_coeff = 0.0
 
 N_TRAINING_THREADS = 4
 
