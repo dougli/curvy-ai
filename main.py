@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 from multiprocessing import freeze_support
 
 import numpy as np
@@ -27,14 +28,18 @@ async def main():
 
     trainer = TrainerProcess(on_model_update=model.load_checkpoint)
 
-    game = Game("lidouglas@gmail.com", "mzk-drw-krd3EVP5axn", show_screen=True)
+    game = Game("lidouglas@gmail.com", "mzk-drw-krd3EVP5axn", show_play_area=True)
     await game.launch(CURVE_FEVER)
     await game.login()
     await game.create_match()
     await game.start_match()
     # await game.launch(WEB_GL_GAME)
 
-    reward_history = []
+    if os.path.exists(REWARD_HISTORY_FILE):
+        with open(REWARD_HISTORY_FILE, "r") as f:
+            reward_history = json.load(f)
+    else:
+        reward_history = []
 
     n_steps = 0
     avg_score = 0
@@ -53,7 +58,6 @@ async def main():
             n_steps += 1
             total_reward += reward
             trainer.remember(state, action, prob, value, reward, done)
-            await asyncio.sleep(0.05)
 
         reward_history.append(total_reward)
         avg_score = np.mean(reward_history[-100:])

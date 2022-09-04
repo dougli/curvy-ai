@@ -20,6 +20,7 @@ os.environ["PYPPETEER_CHROMIUM_REVISION"] = "1012729"
 
 
 import pyppeteer
+import pyppeteer.errors
 from pyppeteer import launch
 from pyppeteer.page import Page
 
@@ -39,13 +40,15 @@ SCORE_BACKGROUND_COLOR = np.array([36, 19, 14], dtype=np.float32)  # 0e1324
 SCORE_STATE_THRESHOLD = 205
 
 # Color clipping so we get a clean image as opposed to the blue morphy background
-IN_BLACK = 60
+IN_BLACK = 48
 IN_WHITE = 255
 
 REWARD_ALIVE_PER_SEC = 0.01  # Small bonus every second for staying alive
 REWARD_DEAD_PENALTY = 0  # Penalty for dying
 
 FPS_COUNTER_SIZE = 10
+
+MAX_ALIVE_WAIT_TIME = 15  # Seconds to wait for the game to start
 
 
 tesseract_api = PyTessBaseAPI()
@@ -58,12 +61,14 @@ class Game:
         password: str,
         *,
         headless: bool = True,
-        show_screen: bool = False
+        show_screen: bool = False,
+        show_play_area: bool = False,
     ):
         self.email = email
         self.password = password
         self.headless = headless
         self.show_screen = show_screen
+        self.show_play_area = show_play_area
 
         self.screen = None
         self.frame_times = collections.deque(maxlen=FPS_COUNTER_SIZE)
@@ -118,10 +123,14 @@ class Game:
     async def create_match(self) -> None:
         # Dismiss an annoying popup that sometimes shows up.
         logger.info("Dismissing annoying popup...")
-        await self.page.waitForSelector(".popup__x-button", timeout=5000)
-        button = await self.page.querySelector(".popup__x-button")
-        if button:
-            await button.click()
+        try:
+            await self.page.waitForSelector(".popup__x-button", timeout=5000)
+            button = await self.page.querySelector(".popup__x-button")
+            if button:
+                await button.click()
+        except pyppeteer.errors.TimeoutError:
+            # Sometimes this popup doesn't show up.
+            pass
 
         # Click the "CREATE MATCH" button.
         logger.info("Creating a match...")
@@ -170,7 +179,7 @@ class Game:
 
         await self.page.waitForSelector("canvas")
         self.in_play = True
-        asyncio.ensure_future(self._wait_for_game_end())
+        # asyncio.ensure_future(self._wait_for_game_end())
         logger.success("Game started!")
 
     @property
@@ -197,6 +206,9 @@ class Game:
             image = np.clip(
                 (image - IN_BLACK) * (255.0 / (IN_WHITE - IN_BLACK)), 0, 255.0
             )
+
+            cv2.imshow("image", image.astype(np.uint8))
+            cv2.waitKey(1)
 
             # Rescale to 0-1 and return as 3D array (for compatibility with the
             # neural network).
@@ -315,7 +327,21 @@ class Game:
 
     async def wait_for_alive(self):
         """Wait for the player to be alive."""
+        start_time = time.time()
         while True:
+            now = time.time()
+            if now - start_time > MAX_ALIVE_WAIT_TIME:
+                logger.warning(
+                    "Waited too long for alive state. Refreshing the browser."
+                )
+                self.in_play = False
+                self.score = INITIAL_SCORE
+                await self.set_action(Action.NOTHING)
+                await self.page.reload()
+                await self.create_match()
+                await self.start_match()
+                start_time = time.time()
+
             player = self.player
             if player.alive:
                 self.last_reward_time = time.time()
