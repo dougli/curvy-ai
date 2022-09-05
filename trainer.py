@@ -17,7 +17,7 @@ n_epochs = 10
 minibatch_size = 64
 gamma = 0.99
 gae_lambda = 0.95
-policy_clip = 0.2
+policy_clip = 0.1
 vf_coeff = 1
 entropy_coeff = 0.0
 
