@@ -11,7 +11,7 @@ REWARD_HISTORY_FILE = "out/reward_history.json"
 
 def conv_0_filters():
     model = CurvyNet((1, *INPUT_SHAPE), len(Action))
-    model.load_latest_checkpoint()
+    model.load_checkpoint()
 
     weights: np.ndarray = model.shared[0].weight.detach().numpy()  # type: ignore
     weights = weights.squeeze()

@@ -9,7 +9,7 @@ import logger
 from agent import CurvyNet
 from screen import INPUT_SHAPE, Account, Action, Game
 
-N_GAME_THREADS = 4
+N_GAME_THREADS = 2
 CURVE_FEVER = "https://curvefever.pro"
 
 
