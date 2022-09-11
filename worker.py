@@ -76,12 +76,7 @@ class Worker:
         self.model.load_checkpoint()
 
     async def run(self):
-        game = Game(
-            self.account.match_name,
-            self.account.match_password,
-            show_screen=True,
-            show_play_area=True,
-        )
+        game = Game(self.account.match_name, self.account.match_password)
         await game.launch(CURVE_FEVER)
         await game.login(self.account.email, self.account.password)
         if self.account.is_host:
@@ -92,21 +87,29 @@ class Worker:
         asyncio.ensure_future(self._poll_receiver())
 
         n_steps = 0
-
-        for episode in range(1000000):
+        episode = 0
+        for _ in range(1000000):
             if not game.in_play:
+                if episode > 0:
+                    self.log_reward(n_steps)
+                    logger.info(
+                        f"Episode {episode}, steps: {n_steps}, "
+                        f"game score {game.score}, fps {game.fps}"
+                    )
+
                 await game.skip_powerup()
                 if self.account.is_host:
                     for username in self.account.wait_for:
                         await game.wait_for_player_ready(username)
                     await game.start_match()
                 await game.wait_for_start()
+                n_steps = 0
+                episode += 1
 
             ready_to_play = await game.wait_for_alive()
             if not ready_to_play:
                 continue
 
-            total_reward = 0
             done = False
             while not done:
                 state = game.play_area
@@ -114,15 +117,7 @@ class Worker:
                 action, prob, value = self.model.choose_action(torch_state)
                 reward, done = await game.step(Action(action))
                 n_steps += 1
-                total_reward += reward
                 self.remember(state, action, prob, value, reward, done)
-
-            self.log_reward(total_reward)
-
-            logger.info(
-                f"Episode {episode}, reward {round(total_reward, 3)}, "
-                f"steps {n_steps}, game score {game.player.score}, fps {game.fps}"
-            )
 
     def remember(self, state, action, prob, value, reward, done):
         self.sender.put(

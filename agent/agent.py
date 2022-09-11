@@ -1,4 +1,3 @@
-import logger
 import numpy as np
 import torch as T
 import torch.optim as optim
@@ -37,7 +36,6 @@ class PPOMemory:
     def compute_gae(self):
         # Calculate advantages. We're throwing away the last value because we don't have
         # a next state
-        logger.info(f"GAE rewards length: {len(self.rewards)}")
         n_steps = len(self.rewards) - 1
 
         advantages = np.zeros(n_steps)
@@ -101,6 +99,9 @@ class Agent:
 
     def save_models(self):
         self.model.save_checkpoint()
+
+    def backup_models(self):
+        self.model.backup_checkpoint()
 
     def load_models(self):
         self.model.load_checkpoint()

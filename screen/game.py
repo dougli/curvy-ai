@@ -195,7 +195,9 @@ class Game:
         # Wait for an ad to complete, which is usually 30 seconds.
         logger.info("Waiting for ad to complete (takes over 30s)...")
         await asyncio.sleep(5)
-        await self.page.waitForSelector(".fullscreen-ad-container", hidden=True)
+        await self.page.waitForSelector(
+            ".fullscreen-ad-container", hidden=True, timeout=40000
+        )
 
         logger.info("Checking to make sure we are not a spectator...")
         try:
@@ -226,8 +228,9 @@ class Game:
         await self.page.click("button.button--start-timer")
 
     async def wait_for_start(self) -> None:
-        await self.page.waitForSelector("canvas")
+        await self.page.waitForSelector("canvas", timeout=60000)
         self.in_play = True
+        self.score = INITIAL_SCORE
         asyncio.ensure_future(self._wait_for_game_end())
         logger.success("Game started!")
 
@@ -435,7 +438,6 @@ class Game:
             [wait_for_canvas, wait_for_rematch], return_when=asyncio.FIRST_COMPLETED
         )
         self.in_play = False
-        self.score = INITIAL_SCORE
         for task in pending:
             task.cancel()
         await self.set_action(Action.NOTHING)

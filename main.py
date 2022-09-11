@@ -24,9 +24,9 @@ async def main():
     torch.set_num_threads(N_GAME_THREADS)
 
     model = CurvyNet((1, *INPUT_SHAPE), len(Action)).to(cpu)
-    model.load_checkpoint()
+    model.load_latest_checkpoint()
 
-    trainer = TrainerProcess(on_model_update=model.load_checkpoint)
+    trainer = TrainerProcess(on_model_update=model.load_latest_checkpoint)
 
     game = Game("hypermoop's match", "pwei93Fx")
     await game.launch(CURVE_FEVER)

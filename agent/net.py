@@ -1,4 +1,5 @@
 import os
+import time
 
 import logger
 import numpy as np
@@ -6,6 +7,7 @@ import torch
 from torch import nn
 
 CHECKPOINT_FILE = "out/model_checkpoint"
+BACKUP_DIR = "out/backups"
 
 
 class CurvyNet(nn.Module):
@@ -70,3 +72,11 @@ class CurvyNet(nn.Module):
             self.load_state_dict(torch.load(filename))
         else:
             logger.warning(f"Checkpoint file {filename} not found")
+
+    def backup_checkpoint(self):
+        directory = os.path.join(os.path.dirname(__file__), "..", BACKUP_DIR)
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        filename = os.path.join(directory, f"model_checkpoint_{int(time.time())}")
+        logger.success(f"Backing up checkpoint to {filename}")
+        torch.save(self.state_dict(), filename)

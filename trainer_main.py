@@ -10,17 +10,6 @@ from agent import Agent
 from screen import INPUT_SHAPE, Account, Action
 from worker import WorkerProcess
 
-# Hyperparameters
-horizon = 256 * 8
-lr = 0.0003
-n_epochs = 10
-minibatch_size = 64
-gamma = 0.99
-gae_lambda = 0.95
-policy_clip = 0.1
-vf_coeff = 1
-entropy_coeff = 0.0
-
 ACCOUNTS = [
     Account(
         "lidouglas@gmail.com",
@@ -37,20 +26,32 @@ ACCOUNTS = [
         "vQgJ3zaP",
         False,
     ),
-    # Account(
-    #     "misstep.gills.0x@icloud.com",
-    #     ".-.qqn@F@64eiwYk*Mao",
-    #     "aieegame",
-    #     "18xielPa",
-    #     True,
-    #     ("coiifan",),
-    # ),
-    # Account(
-    #     "woyexo5962@iunicus.com", "RQZ1tgt3etg3wfk-cmu", "aieegame", "18xielPa", False
-    # ),
+    Account(
+        "misstep.gills.0x@icloud.com",
+        ".-.qqn@F@64eiwYk*Mao",
+        "feedx9",
+        "18xielPa",
+        True,
+        ("coiifan",),
+    ),
+    Account(
+        "woyexo5962@iunicus.com", "RQZ1tgt3etg3wfk-cmu", "feedx9", "18xielPa", False
+    ),
 ]
 
 
+# Hyperparameters
+horizon = (256 + 1) * len(ACCOUNTS)  # Add 1 to account for last state in the trajectory
+lr = 0.0003
+n_epochs = 3
+minibatch_size = 32
+gamma = 0.99
+gae_lambda = 0.95
+policy_clip = 0.1
+vf_coeff = 1
+entropy_coeff = 0.01
+
+SAVE_MODEL_EVERY_N_TRAINS = 10
 N_TRAINING_THREADS = 4
 REWARD_HISTORY_FILE = "out/reward_history.json"
 
@@ -78,6 +79,7 @@ class Trainer:
                 self.reward_history = json.load(f)
 
         self.n_steps = 0
+        self.n_trains = 0
 
     async def run(self):
         self.device = init_device()
@@ -111,16 +113,20 @@ class Trainer:
     def remember(self, id, state, action, probs, vals, reward, done):
         self.agent.remember(id, state, action, probs, vals, reward, done)
         self.n_steps += 1
+        self.n_trains += 1
         if self.n_steps % horizon == 0:
             logger.warning("Training agent")
             self.agent.learn()
             self.agent.save_models()
+            if self.n_trains % SAVE_MODEL_EVERY_N_TRAINS == 0:
+                self.agent.backup_models()
+
             self.inform_workers()
 
     def log_reward(self, reward):
         self.reward_history.append(reward)
-        # with open(REWARD_HISTORY_FILE, "w") as f:
-        #     json.dump(self.reward_history, f)
+        with open(REWARD_HISTORY_FILE, "w") as f:
+            json.dump(self.reward_history, f)
 
     def inform_workers(self):
         for worker in self.workers:
