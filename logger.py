@@ -1,7 +1,10 @@
-import sys
 import time as pytime
 
 from termcolor import colored
+
+
+def error(text: str):
+    print(colored(text, "red"))
 
 
 def warning(text: str):

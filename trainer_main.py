@@ -1,14 +1,13 @@
 import asyncio
 import json
 import os
-from collections import namedtuple
 
 import torch
 import torch.backends.mps
 
 import logger
 from agent import Agent
-from screen import INPUT_SHAPE, Action
+from screen import INPUT_SHAPE, Account, Action
 from worker import WorkerProcess
 
 # Hyperparameters
@@ -22,12 +21,33 @@ policy_clip = 0.1
 vf_coeff = 1
 entropy_coeff = 0.0
 
-Account = namedtuple("Account", ["email", "password"])
-
 ACCOUNTS = [
-    Account("lidouglas@gmail.com", "mzk-drw-krd3EVP5axn"),
-    Account("wheels.hallow_0g@icloud.com", "8.h*oVJokU69.GuHyLMf"),
-    Account("misstep.gills.0x@icloud.com", ".-.qqn@F@64eiwYk*Mao"),
+    Account(
+        "lidouglas@gmail.com",
+        "mzk-drw-krd3EVP5axn",
+        "hypermoop's match",
+        "vQgJ3zaP",
+        True,
+        ("eafdorf",),
+    ),
+    Account(
+        "wheels.hallow_0g@icloud.com",
+        "8.h*oVJokU69.GuHyLMf",
+        "hypermoop's match",
+        "vQgJ3zaP",
+        False,
+    ),
+    # Account(
+    #     "misstep.gills.0x@icloud.com",
+    #     ".-.qqn@F@64eiwYk*Mao",
+    #     "aieegame",
+    #     "18xielPa",
+    #     True,
+    #     ("coiifan",),
+    # ),
+    # Account(
+    #     "woyexo5962@iunicus.com", "RQZ1tgt3etg3wfk-cmu", "aieegame", "18xielPa", False
+    # ),
 ]
 
 
@@ -81,8 +101,8 @@ class Trainer:
         self.agent.load_models()
 
         self.workers = [
-            WorkerProcess(i, acct.email, acct.password, self.remember, self.log_reward)
-            for i, acct in enumerate(ACCOUNTS)
+            WorkerProcess(i, account, self.remember, self.log_reward)
+            for i, account in enumerate(ACCOUNTS)
         ]
 
         while True:
@@ -92,15 +112,15 @@ class Trainer:
         self.agent.remember(id, state, action, probs, vals, reward, done)
         self.n_steps += 1
         if self.n_steps % horizon == 0:
-            logger.warning("Traning agent")
+            logger.warning("Training agent")
             self.agent.learn()
             self.agent.save_models()
             self.inform_workers()
 
     def log_reward(self, reward):
         self.reward_history.append(reward)
-        with open(REWARD_HISTORY_FILE, "w") as f:
-            json.dump(self.reward_history, f)
+        # with open(REWARD_HISTORY_FILE, "w") as f:
+        #     json.dump(self.reward_history, f)
 
     def inform_workers(self):
         for worker in self.workers:

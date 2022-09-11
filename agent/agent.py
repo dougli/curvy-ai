@@ -1,3 +1,4 @@
+import logger
 import numpy as np
 import torch as T
 import torch.optim as optim
@@ -36,6 +37,7 @@ class PPOMemory:
     def compute_gae(self):
         # Calculate advantages. We're throwing away the last value because we don't have
         # a next state
+        logger.info(f"GAE rewards length: {len(self.rewards)}")
         n_steps = len(self.rewards) - 1
 
         advantages = np.zeros(n_steps)
@@ -89,7 +91,7 @@ class Agent:
         self.entropy_coeff = entropy_coeff
 
         self.model = CurvyNet((1, *input_shape), n_actions).to(device)
-        self.memories = [PPOMemory(gamma, gae_lambda)] * n_agents
+        self.memories = [PPOMemory(gamma, gae_lambda) for _ in range(n_agents)]
         self.device = device
 
         self.optimizer = optim.Adam(self.model.parameters(), lr=alpha)
@@ -111,6 +113,7 @@ class Agent:
         old_prob_arr = np.concatenate([m[2] for m in memories])
         vals_arr = np.concatenate([m[3] for m in memories])
         advantage = np.concatenate([m[4] for m in memories])
+        advantage = T.tensor(advantage, dtype=T.float32).to(self.device)
 
         indices = np.arange(state_arr.shape[0])
         for _ in range(self.n_epochs):

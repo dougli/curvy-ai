@@ -7,7 +7,7 @@ import torch
 
 import logger
 from agent import CurvyNet
-from screen import INPUT_SHAPE, Action, Game
+from screen import INPUT_SHAPE, Account, Action, Game
 
 N_GAME_THREADS = 4
 CURVE_FEVER = "https://curvefever.pro"
@@ -17,14 +17,12 @@ class WorkerProcess:
     def __init__(
         self,
         id: int,
-        email: str,
-        password: str,
+        account: Account,
         on_remember: Callable,
         on_log_reward: Callable,
     ):
         self.id = id
-        self.email = email
-        self.password = password
+        self.account = account
         self._on_rememeber = on_remember
         self._on_log_reward = on_log_reward
 
@@ -33,7 +31,11 @@ class WorkerProcess:
         self.receiver = ctx.Queue()
         self.process = ctx.Process(
             target=start_worker_process,
-            args=(self.email, self.password, self.receiver, self.sender),
+            args=(
+                self.account,
+                self.receiver,
+                self.sender,
+            ),
         )
         self.process.start()
 
@@ -56,9 +58,13 @@ class WorkerProcess:
 
 
 class Worker:
-    def __init__(self, email: str, password: str, sender: mp.Queue, receiver: mp.Queue):
-        self.email = email
-        self.password = password
+    def __init__(
+        self,
+        account: Account,
+        sender: mp.Queue,
+        receiver: mp.Queue,
+    ):
+        self.account = account
         self.sender = sender
         self.receiver = receiver
 
@@ -70,19 +76,35 @@ class Worker:
         self.model.load_checkpoint()
 
     async def run(self):
-        game = Game(self.email, self.password)
+        game = Game(
+            self.account.match_name,
+            self.account.match_password,
+            show_screen=True,
+            show_play_area=True,
+        )
         await game.launch(CURVE_FEVER)
-        await game.login()
-        await game.create_match()
-        await game.start_match()
+        await game.login(self.account.email, self.account.password)
+        if self.account.is_host:
+            await game.create_match()
+        else:
+            await game.join_match()
 
         asyncio.ensure_future(self._poll_receiver())
 
         n_steps = 0
-        avg_score = 0
 
-        for episode in range(10000):
-            await game.wait_for_alive()
+        for episode in range(1000000):
+            if not game.in_play:
+                await game.skip_powerup()
+                if self.account.is_host:
+                    for username in self.account.wait_for:
+                        await game.wait_for_player_ready(username)
+                    await game.start_match()
+                await game.wait_for_start()
+
+            ready_to_play = await game.wait_for_alive()
+            if not ready_to_play:
+                continue
 
             total_reward = 0
             done = False
@@ -98,7 +120,8 @@ class Worker:
             self.log_reward(total_reward)
 
             logger.info(
-                f"Episode {episode}, reward {round(total_reward, 3)}, avg {round(avg_score, 3)}, steps {n_steps}, game score {game.player.score}"
+                f"Episode {episode}, reward {round(total_reward, 3)}, "
+                f"steps {n_steps}, game score {game.player.score}, fps {game.fps}"
             )
 
     def remember(self, state, action, prob, value, reward, done):

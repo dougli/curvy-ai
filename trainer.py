@@ -83,6 +83,7 @@ def trainer_process(sender: mp.Queue, receiver: mp.Queue):
         gae_lambda=gae_lambda,
         policy_clip=policy_clip,
         minibatch_size=minibatch_size,
+        n_agents=1,
         n_epochs=n_epochs,
         alpha=lr,
         vf_coeff=vf_coeff,
@@ -93,7 +94,7 @@ def trainer_process(sender: mp.Queue, receiver: mp.Queue):
     n_steps = 0
     while True:
         state, action, probs, vals, reward, done = receiver.get(block=True)
-        agent.remember(state, action, probs, vals, reward, done)
+        agent.remember(0, state, action, probs, vals, reward, done)
         n_steps += 1
 
         if n_steps % horizon == 0:

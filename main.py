@@ -28,9 +28,9 @@ async def main():
 
     trainer = TrainerProcess(on_model_update=model.load_checkpoint)
 
-    game = Game("lidouglas@gmail.com", "mzk-drw-krd3EVP5axn")
+    game = Game("hypermoop's match", "pwei93Fx")
     await game.launch(CURVE_FEVER)
-    await game.login()
+    await game.login("lidouglas@gmail.com", "mzk-drw-krd3EVP5axn")
     await game.create_match()
     await game.start_match()
     # await game.launch(WEB_GL_GAME)

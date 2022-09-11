@@ -2,7 +2,6 @@ import asyncio
 import base64
 import collections
 import os
-import secrets
 import time
 from functools import cached_property
 from typing import Any, Optional
@@ -11,7 +10,6 @@ import cv2
 import logger
 import numpy as np
 from PIL import Image
-from termcolor import colored
 from tesserocr import PyTessBaseAPI
 
 from .types import Action, Player, Rect
@@ -26,7 +24,7 @@ from pyppeteer.page import Page
 
 # =================================================== 6x
 VIEWPORT = {"width": 1920, "height": 1080}
-PLAY_AREA = Rect(x=300, y=0, w=1620, h=1080)
+PLAY_AREA = Rect(x=810, y=0, w=648, h=1080)
 PLAY_AREA_SCALING_FACTOR = 6
 SCORE_HEIGHT = 41
 SCORE_AREA = Rect(x=253, y=66, w=41, h=SCORE_HEIGHT * 8)
@@ -45,7 +43,7 @@ SCORE_AREA = Rect(x=253, y=66, w=41, h=SCORE_HEIGHT * 8)
 # SCORE_HEIGHT = 27
 # SCORE_AREA = Rect(x=170, y=43, w=25, h=SCORE_HEIGHT * 8)
 
-PLAY_AREA_RESIZED = (180, 270)
+PLAY_AREA_RESIZED = (180, 108)
 assert PLAY_AREA.w / PLAY_AREA_SCALING_FACTOR == PLAY_AREA_RESIZED[1]
 assert PLAY_AREA.h / PLAY_AREA_SCALING_FACTOR == PLAY_AREA_RESIZED[0]
 
@@ -59,7 +57,7 @@ SCORE_STATE_THRESHOLD = 205
 IN_BLACK = 48
 IN_WHITE = 255
 
-REWARD_ALIVE_PER_SEC = 0.01  # Small bonus every second for staying alive
+REWARD_ALIVE_PER_SEC = 0  # Small bonus every second for staying alive
 REWARD_DEAD_PENALTY = 0  # Penalty for dying
 
 INITIAL_SCORE = 10
@@ -74,15 +72,16 @@ tesseract_api = PyTessBaseAPI()
 class Game:
     def __init__(
         self,
-        email: str,
-        password: str,
+        match_name: str,
+        match_password: str,
         *,
         headless: bool = True,
         show_screen: bool = False,
         show_play_area: bool = False,
     ):
-        self.email = email
-        self.password = password
+        self.match_name = match_name
+        self.match_password = match_password
+
         self.headless = headless
         self.show_screen = show_screen
         self.show_play_area = show_play_area
@@ -121,21 +120,20 @@ class Game:
         logger.info("Loading URL...")
         await self.page.goto(url)
 
-    async def login(self) -> None:
+    async def login(self, email: str, password: str) -> None:
         # Click the "SIGN IN" link.
         logger.info("Signing in...")
         await self.page.waitForSelector("a.sign-in")
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(1.5)
         await self.page.click("a.sign-in")
 
         # Fill in our username and password and submit.
         await self.page.waitForSelector("input[name=email]")
-        await self.page.type("input[name=email]", self.email)
-        await self.page.type("input[name=password]", self.password)
+        await self.page.type("input[name=email]", email)
+        await self.page.type("input[name=password]", password)
         button = await self.page.xpath("//button[contains(., 'SIGN IN')]")
         await button[0].click()
 
-    async def create_match(self) -> None:
         # Dismiss an annoying popup that sometimes shows up.
         logger.info("Dismissing annoying popup...")
         try:
@@ -146,17 +144,20 @@ class Game:
         except pyppeteer.errors.TimeoutError:
             # Sometimes this popup doesn't show up.
             pass
-
-        # Click the "CREATE MATCH" button.
-        logger.info("Creating a match...")
         await asyncio.sleep(1)
+
+    async def create_match(self) -> None:
+        # Click the "CREATE MATCH" button.
+        logger.info(f"Creating match '{self.match_name}'...")
         button = await self.page.xpath("//button[contains(., 'CREATE MATCH')]")
         await button[0].click()
 
         # Set up our game parameters and click the "CREATE MATCH" button in the dialog.
+        button = await self.page.xpath("//button[contains(., 'UNRANKED')]")
+        await button[0].click()
         button = await self.page.xpath("//button[contains(., 'PRIVATE')]")
         await button[0].click()
-        await self.page.type("input[name=password]", secrets.token_urlsafe(8))
+        await self.page.type("input[name=password]", self.match_password)
         button = await self.page.xpath("//button[contains(., 'DISABLED')]")
         await button[1].click()  # Disable pickups
         button = await self.page.xpath(
@@ -164,17 +165,45 @@ class Game:
         )
         await button[0].click()  # Click the final "CREATE MATCH" button.
 
-    async def start_match(self) -> None:
+    async def join_match(self) -> None:
+        # Click the "JOIN MATCH" button.
+        logger.info(f"Joining match '{self.match_name}'...")
+        button = await self.page.xpath("//button[contains(., 'JOIN MATCH')]")
+        await button[0].click()
+
+        # Join the match with the given name and password
+        start = time.time()
+        while time.time() - start < 30:
+            button = await self.page.xpath(
+                f'//*[contains(text(), "{self.match_name}")]/..//button'
+            )
+            if button:
+                await button[0].click()
+                break
+
+            await self.page.waitForSelector("span.refresh-icon")
+            button = await self.page.querySelector("span.refresh-icon")
+            await button.click()
+            await asyncio.sleep(3)
+
+        await asyncio.sleep(3)
+        await self.page.type("input[name=password]", self.match_password)
+        button = await self.page.xpath("//button[contains(., 'JOIN MATCH')]")
+        await button[0].click()  # Click the final "JOIN MATCH" button.
+
+    async def skip_powerup(self) -> None:
         # Wait for an ad to complete, which is usually 30 seconds.
         logger.info("Waiting for ad to complete (takes over 30s)...")
-        await asyncio.sleep(10)
+        await asyncio.sleep(5)
         await self.page.waitForSelector(".fullscreen-ad-container", hidden=True)
 
         logger.info("Checking to make sure we are not a spectator...")
         try:
+            await self.page.waitForXPath(
+                "//button[contains(., 'Play in this match')]", timeout=2000
+            )
             button = await self.page.xpath(
-                "//button[contains(., 'Play in this match')]",
-                timeout=1000,
+                "//button[contains(., 'Play in this match')]"
             )
             if button:
                 await button[0].click()
@@ -182,19 +211,24 @@ class Game:
             # Button was not found. Don't worry, just move on.
             pass
 
-        # Click the "PLAY!" button.
         logger.info("Skipping powerup selection...")
         await self.page.waitForSelector("span.play-button__content", visible=True)
         await self.page.click("span.play-button__content")
 
+    async def wait_for_player_ready(self, username: str) -> None:
+        logger.info(f"Waiting for player '{username}' to join...")
+        await self.page.xpath(f'//*[contains(text(), "{username}")]')
+
+    async def start_match(self) -> None:
         logger.info("Clicking the play button...")
-        await self.page.waitForSelector("button.button--start-timer")
+        await self.page.waitForSelector("button.button--start-timer:not([disabled])")
         await asyncio.sleep(0.5)
         await self.page.click("button.button--start-timer")
 
+    async def wait_for_start(self) -> None:
         await self.page.waitForSelector("canvas")
         self.in_play = True
-        # asyncio.ensure_future(self._wait_for_game_end())
+        asyncio.ensure_future(self._wait_for_game_end())
         logger.success("Game started!")
 
     @property
@@ -321,27 +355,15 @@ class Game:
 
         return final_reward, next_state.dead
 
-    async def wait_for_alive(self):
+    async def wait_for_alive(self) -> bool:
         """Wait for the player to be alive."""
-        start_time = time.time()
         while True:
-            now = time.time()
-            if now - start_time > MAX_ALIVE_WAIT_TIME:
-                logger.warning(
-                    "Waited too long for alive state. Refreshing the browser."
-                )
-                self.in_play = False
-                self.score = INITIAL_SCORE
-                await self.set_action(Action.NOTHING)
-                await self.page.reload()
-                await self.create_match()
-                await self.start_match()
-                start_time = time.time()
-
+            if not self.in_play:
+                return False
             player = self.player
             if player.alive:
                 self.last_reward_time = time.time()
-                return
+                return True
 
             # Wait for a new frame
             async with self.screen_lock:
@@ -420,12 +442,8 @@ class Game:
 
         if wait_for_rematch in done:
             logger.success("Game ended smoothly! Starting a new game...")
-            await asyncio.sleep(0.5)
-            await self.page.click(".rematch-container")
-            await self.start_match()
-            return
+        else:
+            logger.warning("Game ended! Starting a new game...")
 
-        logger.warning("Game ended suddenly! Canvas window was killed. Refreshing...")
-        await self.page.reload()
-        await self.create_match()
-        await self.start_match()
+        await asyncio.sleep(1)
+        await self.page.click(".rematch-container")
