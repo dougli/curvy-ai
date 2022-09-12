@@ -1,5 +1,6 @@
 import os
 import time
+from typing import Optional
 
 import logger
 import numpy as np
@@ -80,3 +81,18 @@ class CurvyNet(nn.Module):
         filename = os.path.join(directory, f"model_checkpoint_{int(time.time())}")
         logger.success(f"Backing up checkpoint to {filename}")
         torch.save(self.state_dict(), filename)
+
+    def load_random_backup(self) -> Optional[str]:
+        directory = os.path.join(os.path.dirname(__file__), "..", BACKUP_DIR)
+        if not os.path.exists(directory):
+            logger.warning(f"No backups found in {directory}")
+            return None
+        backups = os.listdir(directory)
+        if not backups:
+            logger.warning(f"No backups found in {directory}")
+            return None
+        filename = np.random.choice(backups)
+        filepath = os.path.join(directory, filename)
+        logger.success(f"Loading backup from {filename}")
+        self.load_state_dict(torch.load(filepath))
+        return filename

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+from typing import Optional
 
 import torch
 import torch.backends.mps
@@ -51,9 +52,10 @@ policy_clip = 0.1
 vf_coeff = 1
 entropy_coeff = 0.01
 
-SAVE_MODEL_EVERY_N_TRAINS = 50
+SAVE_MODEL_EVERY_N_TRAINS = 20
 N_TRAINING_THREADS = 4
 REWARD_HISTORY_FILE = "out/reward_history.json"
+OLD_AGENTS_REWARD_HISTORY_FILE = "out/old_agents_reward_history.json"
 
 
 def init_device():
@@ -74,9 +76,13 @@ def init_device():
 class Trainer:
     def __init__(self):
         self.reward_history = []
+        self.old_agents_reward_history = {}
         if os.path.exists(REWARD_HISTORY_FILE):
             with open(REWARD_HISTORY_FILE, "r") as f:
                 self.reward_history = json.load(f)
+        if os.path.exists(OLD_AGENTS_REWARD_HISTORY_FILE):
+            with open(OLD_AGENTS_REWARD_HISTORY_FILE, "r") as f:
+                self.old_agents_reward_history = json.load(f)
 
         self.n_steps = 0
         self.n_trains = 0
@@ -123,10 +129,17 @@ class Trainer:
 
             self.inform_workers()
 
-    def log_reward(self, reward):
-        self.reward_history.append(reward)
-        with open(REWARD_HISTORY_FILE, "w") as f:
-            json.dump(self.reward_history, f)
+    def log_reward(self, reward, old_agent_name: Optional[str] = None):
+        if old_agent_name is not None:
+            if old_agent_name not in self.old_agents_reward_history:
+                self.old_agents_reward_history[old_agent_name] = []
+            self.old_agents_reward_history[old_agent_name].append(reward)
+            with open(OLD_AGENTS_REWARD_HISTORY_FILE, "w") as f:
+                json.dump(self.old_agents_reward_history, f)
+        else:
+            self.reward_history.append(reward)
+            with open(REWARD_HISTORY_FILE, "w") as f:
+                json.dump(self.reward_history, f)
 
     def inform_workers(self):
         for worker in self.workers:

@@ -53,6 +53,10 @@ class PPOMemory:
         return advantages
 
     def export_for_learning(self):
+        if len(self.rewards) <= 1:
+            self.clear()
+            return None
+
         result = (
             self.states[:-1],
             self.actions[:-1],
@@ -109,11 +113,11 @@ class Agent:
     def learn(self):
         memories = [m.export_for_learning() for m in self.memories]
 
-        state_arr = np.concatenate([m[0] for m in memories])
-        action_arr = np.concatenate([m[1] for m in memories])
-        old_prob_arr = np.concatenate([m[2] for m in memories])
-        vals_arr = np.concatenate([m[3] for m in memories])
-        advantage = np.concatenate([m[4] for m in memories])
+        state_arr = np.concatenate([m[0] for m in memories if m])
+        action_arr = np.concatenate([m[1] for m in memories if m])
+        old_prob_arr = np.concatenate([m[2] for m in memories if m])
+        vals_arr = np.concatenate([m[3] for m in memories if m])
+        advantage = np.concatenate([m[4] for m in memories if m])
         advantage = T.tensor(advantage, dtype=T.float32).to(self.device)
 
         indices = np.arange(state_arr.shape[0])
