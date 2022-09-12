@@ -51,7 +51,7 @@ policy_clip = 0.1
 vf_coeff = 1
 entropy_coeff = 0.01
 
-SAVE_MODEL_EVERY_N_TRAINS = 10
+SAVE_MODEL_EVERY_N_TRAINS = 50
 N_TRAINING_THREADS = 4
 REWARD_HISTORY_FILE = "out/reward_history.json"
 
@@ -113,11 +113,11 @@ class Trainer:
     def remember(self, id, state, action, probs, vals, reward, done):
         self.agent.remember(id, state, action, probs, vals, reward, done)
         self.n_steps += 1
-        self.n_trains += 1
         if self.n_steps % horizon == 0:
             logger.warning("Training agent")
             self.agent.learn()
             self.agent.save_models()
+            self.n_trains += 1
             if self.n_trains % SAVE_MODEL_EVERY_N_TRAINS == 0:
                 self.agent.backup_models()
 

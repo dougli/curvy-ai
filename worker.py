@@ -1,5 +1,6 @@
 import asyncio
 import multiprocessing as mp
+import time
 from queue import Empty
 from typing import Callable
 
@@ -111,13 +112,19 @@ class Worker:
                 continue
 
             done = False
+            n_steps_inner = 0
+            start_inner = time.time()
             while not done:
                 state = game.play_area
                 torch_state = torch.tensor([state], dtype=torch.float32).to(self.cpu)
                 action, prob, value = self.model.choose_action(torch_state)
                 reward, done = await game.step(Action(action))
                 n_steps += 1
+                n_steps_inner += 1
                 self.remember(state, action, prob, value, reward, done)
+            logger.error(
+                f"Inner steps: {n_steps_inner}, time: {time.time() - start_inner}, FPS: {n_steps_inner / (time.time() - start_inner)}"
+            )
 
     def remember(self, state, action, prob, value, reward, done):
         self.sender.put(

@@ -113,7 +113,7 @@ class Game:
                 "quality": 90,
                 "maxWidth": VIEWPORT["width"],
                 "maxHeight": VIEWPORT["height"],
-                "everyNthFrame": 3,
+                "everyNthFrame": 5,
             },
         )
 
