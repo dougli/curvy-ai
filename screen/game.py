@@ -55,7 +55,7 @@ SCORE_STATE_THRESHOLD = 205
 
 # Color clipping so we get a clean image as opposed to the blue morphy background
 IN_BLACK = 48
-IN_WHITE = 255
+IN_WHITE = 90
 
 REWARD_ALIVE_PER_SEC = 1  # Small bonus every second for staying alive
 REWARD_DEAD_PENALTY = -5  # Penalty for dying

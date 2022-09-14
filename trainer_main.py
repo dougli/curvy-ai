@@ -13,21 +13,21 @@ from screen import INPUT_SHAPE, Account, Action
 from worker import WorkerProcess
 
 ACCOUNTS = [
-    Account(
-        "jotocik870@nicoimg.com",
-        "DZA*vev-kvg3etx-twz",
-        "sarcatan's match",
-        "vQgJ3zaP",
-        True,
-        ("eafdorf",),
-    ),
-    Account(
-        "wheels.hallow_0g@icloud.com",
-        "8.h*oVJokU69.GuHyLMf",
-        "sarcatan's match",
-        "vQgJ3zaP",
-        False,
-    ),
+    # Account(
+    #     "jotocik870@nicoimg.com",
+    #     "DZA*vev-kvg3etx-twz",
+    #     "sarcatan's match",
+    #     "vQgJ3zaP",
+    #     True,
+    #     ("eafdorf",),
+    # ),
+    # Account(
+    #     "wheels.hallow_0g@icloud.com",
+    #     "8.h*oVJokU69.GuHyLMf",
+    #     "sarcatan's match",
+    #     "vQgJ3zaP",
+    #     False,
+    # ),
     Account(
         "misstep.gills.0x@icloud.com",
         ".-.qqn@F@64eiwYk*Mao",
@@ -49,7 +49,7 @@ n_epochs = 3
 minibatch_size = 32
 gamma = 0.99
 gae_lambda = 0.95
-policy_clip = 0.1
+policy_clip = 0.2
 vf_coeff = 1
 entropy_coeff = 0.01
 

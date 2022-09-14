@@ -36,7 +36,7 @@ def rewards():
     for i in range(len(running_avg)):
         running_avg[i] = np.mean(reward_history[max(0, i - 100) : (i + 1)])
 
-    plt.plot(x, reward_history)
-    plt.plot(x, running_avg)
+    plt.plot(x, reward_history, color="lavender")
+    plt.plot(x, running_avg, color="orange")
     plt.title("Reward History")
     plt.show()

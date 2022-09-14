@@ -1,8 +1,15 @@
+import json
+import os
+
+import logger
 import numpy as np
 import torch as T
 import torch.optim as optim
 
 from agent.net import CurvyNet
+
+OPTIMIZER_FILE = "out/optimizer.pt"
+LOSS_HISTORY_FILE = "out/train_loss_history"
 
 
 class PPOMemory:
@@ -97,6 +104,11 @@ class Agent:
         self.device = device
 
         self.optimizer = optim.Adam(self.model.parameters(), lr=alpha)
+        if os.path.exists(OPTIMIZER_FILE):
+            logger.success("Loading optimizer from file")
+            self.optimizer.load_state_dict(T.load(OPTIMIZER_FILE))
+        else:
+            logger.warning("Optimizer file not found. Starting from scratch")
 
     def purge_memory(self, env_idx):
         self.memories[env_idx].clear()
@@ -124,6 +136,12 @@ class Agent:
         advantage = T.tensor(advantage, dtype=T.float32).to(self.device)
 
         indices = np.arange(state_arr.shape[0])
+
+        n_updates = 0
+        mean_actor_loss = 0
+        mean_critic_loss = 0
+        mean_entropy_loss = 0
+
         for _ in range(self.n_epochs):
             np.random.shuffle(indices)
             for start in range(0, len(state_arr), self.minibatch_size):
@@ -168,3 +186,29 @@ class Agent:
                 self.optimizer.zero_grad()
                 total_loss.backward()
                 self.optimizer.step()
+
+                n_updates += 1
+                mean_actor_loss += actor_loss.item()
+                mean_critic_loss += critic_loss.item()
+                mean_entropy_loss += entropy.item()
+        T.save(self.optimizer.state_dict(), OPTIMIZER_FILE)
+        self.save_loss_history(
+            {
+                "actor_loss": mean_actor_loss / n_updates,
+                "critic_loss": mean_critic_loss / n_updates,
+                "entropy_loss": mean_entropy_loss / n_updates,
+            }
+        )
+
+    def save_loss_history(self, loss_history):
+        # Read the loss history file first
+        data = []
+        if os.path.exists(LOSS_HISTORY_FILE):
+            with open(LOSS_HISTORY_FILE, "r") as f:
+                data = json.load(f)
+
+        # Save the loss history
+        data.append(loss_history)
+        with open(LOSS_HISTORY_FILE, "w") as f:
+            json.dump(data, f)
+        logger.warning(f"Loss: {loss_history}")
