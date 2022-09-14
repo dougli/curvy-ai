@@ -15,6 +15,10 @@ def info(text: str):
     print(colored(text, "blue"))
 
 
+def train_info(text: str):
+    print(colored(text, "cyan"))
+
+
 def success(text: str):
     print(colored(text, "green"))
 
@@ -34,4 +38,4 @@ class TimeLogger:
     def __exit__(self, exc_type, exc_value, traceback):
         end_time = pytime.time()
         elapsed_ms = (end_time - self.start_time) * 1000
-        print(colored(f"{self.text} in {elapsed_ms:.2f}ms", "cyan"))
+        print(colored(f"{self.text} in {elapsed_ms:.2f}ms", "magenta"))

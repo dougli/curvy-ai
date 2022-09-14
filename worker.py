@@ -16,6 +16,8 @@ CURVE_FEVER = "https://curvefever.pro"
 
 RANDOM_OLD_MODEL = 0.2
 
+KILL_AFTER_N_SECONDS = 60 * 3  # 3 minutes
+
 
 class WorkerProcess:
     def __init__(
@@ -41,12 +43,30 @@ class WorkerProcess:
                 self.sender,
             ),
         )
-        self.process.start()
 
+        self.to_kill = False
+        self.last_message = time.time()
+        self.process.start()
         asyncio.ensure_future(self._poll_receiver())
+
+    @property
+    def alive(self):
+        return self.process.is_alive()
+
+    def kill(self):
+        self.to_kill = True
 
     async def _poll_receiver(self):
         while True:
+            if self.to_kill or time.time() - self.last_message > KILL_AFTER_N_SECONDS:
+                logger.error(f"Killing worker {self.id}")
+                self.process.terminate()
+                await asyncio.sleep(5)
+                self.process.kill()
+                self.process.join()
+                self.process.close()
+                return
+
             try:
                 while True:
                     message = self.receiver.get(block=False)
@@ -54,6 +74,9 @@ class WorkerProcess:
                         self._on_rememeber(self.id, *message["data"])
                     elif message["type"] == "log_reward":
                         self._on_log_reward(message["data"], message["old_agent_name"])
+                    elif message["type"] == "heartbeat":
+                        pass
+                    self.last_message = time.time()
             except Empty:
                 await asyncio.sleep(0.1)
 
@@ -101,15 +124,23 @@ class Worker:
 
         n_steps = 0
         episode = 0
+        total_reward = 0
         for _ in range(1000000):
             if not game.in_play:
                 if episode > 0:
                     if self.using_old_model:
-                        self.log_reward({"score": game.score, "steps": n_steps})
+                        self.log_reward(
+                            {
+                                "score": game.score,
+                                "steps": n_steps,
+                                "total_reward": total_reward,
+                            }
+                        )
                     else:
-                        self.log_reward(n_steps)
-                    logger.info(
+                        self.log_reward(total_reward)
+                    logger.train_info(
                         f"Episode {episode}, steps: {n_steps}, "
+                        f"total_reward {total_reward}, "
                         f"game score {game.score}, fps {game.fps}"
                     )
 
@@ -131,6 +162,7 @@ class Worker:
                 await game.wait_for_start()
                 n_steps = 0
                 episode += 1
+                total_reward = 0
 
             ready_to_play = await game.wait_for_alive()
             if not ready_to_play:
@@ -139,6 +171,7 @@ class Worker:
             done = False
             n_steps_inner = 0
             start_inner = time.time()
+            round_reward = 0
             while not done:
                 state = game.play_area
                 torch_state = torch.tensor([state], dtype=torch.float32).to(self.cpu)
@@ -146,11 +179,14 @@ class Worker:
                 reward, done = await game.step(Action(action))
                 n_steps += 1
                 n_steps_inner += 1
+                round_reward += reward
                 if not self.using_old_model:
                     self.remember(state, action, prob, value, reward, done)
-            logger.error(
-                f"Inner steps: {n_steps_inner}, time: {time.time() - start_inner}, FPS: {n_steps_inner / (time.time() - start_inner)}"
+            logger.train_info(
+                f"round reward: {round_reward}, time: {time.time() - start_inner}, FPS: {n_steps_inner / (time.time() - start_inner)}"
             )
+            total_reward += round_reward
+            self.heartbeat()
 
     def remember(self, state, action, prob, value, reward, done):
         self.sender.put(
@@ -164,6 +200,9 @@ class Worker:
         self.sender.put(
             {"type": "log_reward", "data": reward, "old_agent_name": self.model_name}
         )
+
+    def heartbeat(self):
+        self.sender.put({"type": "heartbeat"})
 
     async def _poll_receiver(self):
         while True:

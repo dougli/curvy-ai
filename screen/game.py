@@ -57,8 +57,8 @@ SCORE_STATE_THRESHOLD = 205
 IN_BLACK = 48
 IN_WHITE = 255
 
-REWARD_ALIVE_PER_SEC = 0  # Small bonus every second for staying alive
-REWARD_DEAD_PENALTY = 0  # Penalty for dying
+REWARD_ALIVE_PER_SEC = 1  # Small bonus every second for staying alive
+REWARD_DEAD_PENALTY = -5  # Penalty for dying
 
 INITIAL_SCORE = 10
 FPS_COUNTER_SIZE = 10
@@ -92,6 +92,7 @@ class Game:
         self.screen_lock = asyncio.Condition()
         self.score = INITIAL_SCORE
         self.last_reward_time = 0
+        self.last_alive = 0
 
     async def launch(self, url: str) -> None:
         args = pyppeteer.defaultArgs({"headless": self.headless})
@@ -232,7 +233,7 @@ class Game:
         self.in_play = True
         self.score = INITIAL_SCORE
         asyncio.ensure_future(self._wait_for_game_end())
-        logger.success("Game started!")
+        logger.info("Game started!")
 
     @property
     def play_area(self) -> Optional[np.ndarray]:
@@ -340,6 +341,13 @@ class Game:
 
         next_state = self.player
 
+        if next_state.alive:
+            self.last_alive = time.time()
+        elif not next_state.dead and self.last_alive < time.time() - 1:
+            # We haven't seen the player alive in a while, likely because the opponent
+            # has died on the canvas. End the round.
+            return 0, True
+
         # Calculate the reward
         now = time.time()
         elapsed = now - self.last_reward_time
@@ -365,6 +373,7 @@ class Game:
                 return False
             player = self.player
             if player.alive:
+                self.last_alive = time.time()
                 self.last_reward_time = time.time()
                 return True
 
@@ -443,7 +452,7 @@ class Game:
         await self.set_action(Action.NOTHING)
 
         if wait_for_rematch in done:
-            logger.success("Game ended smoothly! Starting a new game...")
+            logger.warning("Game ended smoothly! Starting a new game...")
         else:
             logger.warning("Game ended! Starting a new game...")
 

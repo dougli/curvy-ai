@@ -98,6 +98,9 @@ class Agent:
 
         self.optimizer = optim.Adam(self.model.parameters(), lr=alpha)
 
+    def purge_memory(self, env_idx):
+        self.memories[env_idx].clear()
+
     def remember(self, env_idx, state, action, probs, vals, reward, done):
         self.memories[env_idx].store(state, action, probs, vals, reward, done)
 

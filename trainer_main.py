@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import random
 from typing import Optional
 
 import torch
@@ -13,9 +14,9 @@ from worker import WorkerProcess
 
 ACCOUNTS = [
     Account(
-        "lidouglas@gmail.com",
-        "mzk-drw-krd3EVP5axn",
-        "hypermoop's match",
+        "jotocik870@nicoimg.com",
+        "DZA*vev-kvg3etx-twz",
+        "sarcatan's match",
         "vQgJ3zaP",
         True,
         ("eafdorf",),
@@ -23,7 +24,7 @@ ACCOUNTS = [
     Account(
         "wheels.hallow_0g@icloud.com",
         "8.h*oVJokU69.GuHyLMf",
-        "hypermoop's match",
+        "sarcatan's match",
         "vQgJ3zaP",
         False,
     ),
@@ -52,7 +53,7 @@ policy_clip = 0.1
 vf_coeff = 1
 entropy_coeff = 0.01
 
-SAVE_MODEL_EVERY_N_TRAINS = 20
+SAVE_MODEL_EVERY_N_TRAINS = 10
 N_TRAINING_THREADS = 4
 REWARD_HISTORY_FILE = "out/reward_history.json"
 OLD_AGENTS_REWARD_HISTORY_FILE = "out/old_agents_reward_history.json"
@@ -114,7 +115,20 @@ class Trainer:
         ]
 
         while True:
-            await asyncio.sleep(100)
+            await asyncio.sleep(10)
+            # for i, worker in enumerate(self.workers):
+            #     if not worker.alive:
+            #         first = int(i / 2) * 2
+            #         second = int(i / 2) * 2 + 1
+            #         self.restart_worker(first)
+            #         self.restart_worker(second)
+
+    def restart_worker(self, idx: int):
+        self.workers[idx].kill()
+        self.agent.purge_memory(idx)
+        self.workers[idx] = WorkerProcess(
+            idx, ACCOUNTS[idx], self.remember, self.log_reward
+        )
 
     def remember(self, id, state, action, probs, vals, reward, done):
         self.agent.remember(id, state, action, probs, vals, reward, done)
@@ -123,8 +137,7 @@ class Trainer:
             logger.warning("Training agent")
             self.agent.learn()
             self.agent.save_models()
-            self.n_trains += 1
-            if self.n_trains % SAVE_MODEL_EVERY_N_TRAINS == 0:
+            if random.randint(1, SAVE_MODEL_EVERY_N_TRAINS) == 1:
                 self.agent.backup_models()
 
             self.inform_workers()
