@@ -43,7 +43,7 @@ ACCOUNTS = [
 
 
 # Hyperparameters
-horizon = (256 + 1) * 4  # Add 1 to account for last state in the trajectory
+horizon = (256 + 1) * len(ACCOUNTS)  # Add 1 to account for last state in the trajectory
 lr = 0.0003
 n_epochs = 1  # 3 in the PPO paper, but based on Dota 2 paper, 1 is better (see sample reuse). Empirically verified.
 minibatch_size = 32
@@ -77,7 +77,7 @@ def init_device():
 class Trainer:
     def __init__(self):
         self.reward_history = []
-        self.old_agents_reward_history = {}
+        self.old_agents_reward_history = []
         if os.path.exists(REWARD_HISTORY_FILE):
             with open(REWARD_HISTORY_FILE, "r") as f:
                 self.reward_history = json.load(f)
@@ -138,20 +138,19 @@ class Trainer:
             logger.warning("Training agent")
             self.agent.learn()
             self.agent.save_models()
-            if random.randint(1, SAVE_MODEL_EVERY_N_TRAINS) == 1:
+            self.n_trains += 1
+            if self.n_trains % SAVE_MODEL_EVERY_N_TRAINS == 0:
                 self.agent.backup_models()
 
             self.inform_workers()
 
-    def log_reward(self, reward, old_agent_name: Optional[str] = None):
-        if old_agent_name is not None:
-            if old_agent_name not in self.old_agents_reward_history:
-                self.old_agents_reward_history[old_agent_name] = []
-            self.old_agents_reward_history[old_agent_name].append(reward)
+    def log_reward(self, data):
+        if data["agent_name"]:
+            self.old_agents_reward_history.append(data)
             with open(OLD_AGENTS_REWARD_HISTORY_FILE, "w") as f:
                 json.dump(self.old_agents_reward_history, f)
         else:
-            self.reward_history.append(reward)
+            self.reward_history.append(data)
             with open(REWARD_HISTORY_FILE, "w") as f:
                 json.dump(self.reward_history, f)
 

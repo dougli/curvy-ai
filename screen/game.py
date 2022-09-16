@@ -360,8 +360,6 @@ class Game:
             self.score = next_state.score
         if score_reward == 10:
             won = True
-            # Wait 1 extra second for the UI to set the winning player to not alive
-            await asyncio.sleep(1)
 
         alive_reward = (
             next_state.alive * REWARD_ALIVE_PER_SEC * elapsed

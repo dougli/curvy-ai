@@ -73,9 +73,7 @@ class WorkerProcess:
                     if message["type"] == "remember":
                         self._on_rememeber(self.id, *message["data"])
                     elif message["type"] == "log_reward":
-                        self._on_log_reward(message["data"], message["old_agent_name"])
-                    elif message["type"] == "heartbeat":
-                        pass
+                        self._on_log_reward(message["data"])
                     self.last_message = time.time()
             except Empty:
                 await asyncio.sleep(0.1)
@@ -120,53 +118,36 @@ class Worker:
 
         asyncio.ensure_future(self._poll_receiver())
 
-        episode = 0
-        total_reward = 0
-        round_time = 0
+        just_started = True
         for _ in range(1000000):
             if not game.in_play:
-                if episode > 0:
-                    if self.old_model_name:
-                        self.log_reward(
-                            {"score": game.score, "total_reward": total_reward}
-                        )
-                    else:
-                        self.log_reward(round_time)
-                    logger.train_info(
-                        f"Episode {episode}, total_round_time {round_time}, "
-                        f"total_reward {total_reward}, "
-                        f"game score {game.score}, fps {game.fps}"
-                    )
-
-                self.model_lock.acquire()
-                if random.random() < RANDOM_OLD_MODEL:
-                    self.old_model_name = self.model.load_random_backup()
-                elif self.old_model_name:
-                    self.model.load_checkpoint()
-                    self.old_model_name = None
-                self.model_lock.release()
-
                 await game.skip_powerup()
                 if self.account.is_host:
                     for username in self.account.wait_for:
                         await game.wait_for_player_ready(username)
                     await game.start_match()
                 await game.wait_for_start()
-                episode += 1
-                round_time = 0
-                total_reward = 0
+                just_started = True
+
+            self.model_lock.acquire()
+            if random.random() < RANDOM_OLD_MODEL:
+                self.old_model_name = self.model.load_random_backup()
+            elif self.old_model_name:
+                self.model.load_checkpoint()
+                self.old_model_name = None
+            self.model_lock.release()
 
             ready_to_play = await game.wait_for_alive()
             if not ready_to_play:
                 continue
-            if round_time == 0:
-                # Sleep for 5 seconds because the there's some initial splash screen
+            if just_started:
+                # Sleep for 6 seconds because the there's some initial splash screen
                 # when initially joining a match
-                await asyncio.sleep(5)
+                await asyncio.sleep(6)
 
             done = False
             n_steps_inner = 0
-            start_round_time = time.time()
+            start_time = time.time()
             round_reward = 0
             while not done:
                 state = game.play_area
@@ -177,12 +158,21 @@ class Worker:
                 round_reward += reward
                 if not self.old_model_name:
                     self.remember(state, action, prob, value, reward, done)
+            elapsed = time.time() - start_time
             logger.train_info(
-                f"round reward: {round_reward}, time: {time.time() - start_round_time}, FPS: {n_steps_inner / (time.time() - start_round_time)}"
+                f"round reward: {round_reward}, time: {elapsed}, FPS: {n_steps_inner / elapsed}"
             )
-            round_time += time.time() - start_round_time
-            total_reward += round_reward
-            self.heartbeat()
+            self.log_reward(
+                {
+                    "reward": round_reward,
+                    "time": elapsed,
+                    "agent_name": self.old_model_name,
+                }
+            )
+            just_started = False
+            # Wait 1.5 seconds after the round ends as the UI is still showing the
+            # end-of-round scoreboard
+            await asyncio.sleep(1.5)
 
     def remember(self, state, action, prob, value, reward, done):
         self.sender.put(
@@ -193,16 +183,7 @@ class Worker:
         )
 
     def log_reward(self, reward):
-        self.sender.put(
-            {
-                "type": "log_reward",
-                "data": reward,
-                "old_agent_name": self.old_model_name,
-            }
-        )
-
-    def heartbeat(self):
-        self.sender.put({"type": "heartbeat"})
+        self.sender.put({"type": "log_reward", "data": reward})
 
     async def _poll_receiver(self):
         while True:
