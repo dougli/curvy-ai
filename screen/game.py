@@ -57,7 +57,7 @@ SCORE_STATE_THRESHOLD = 205
 IN_BLACK = 48
 IN_WHITE = 90
 
-REWARD_ALIVE_PER_SEC = 0  # Small bonus every second for staying alive
+REWARD_ALIVE_PER_SEC = 1  # Small bonus every second for staying alive
 REWARD_DEAD_PENALTY = -10  # Penalty for dying
 
 INITIAL_SCORE = 10
@@ -317,7 +317,7 @@ class Game:
         await asyncio.gather(*key_events)
         self.current_action = action
 
-    async def step(self, action: Action) -> tuple[float, bool]:
+    async def step(self, action: Action) -> tuple[float, bool, bool]:
         """Take a step in the environment.
 
         Args:
@@ -343,7 +343,7 @@ class Game:
             self.last_alive = time.time()
         elif not next_state.dead and self.last_alive < time.time() - 1:
             logger.error("Player is not alive nor dead for 1 second. Ending round.")
-            return 0, True
+            return 0, True, False
 
         # Calculate the reward
         now = time.time()
@@ -364,7 +364,7 @@ class Game:
         )
         final_reward = score_reward + alive_reward
 
-        return final_reward, next_state.dead or won
+        return final_reward, next_state.dead or won, won
 
     async def wait_for_alive(self) -> bool:
         """Wait for the player to be alive."""

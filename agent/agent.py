@@ -1,15 +1,16 @@
 import json
 import os
 
+import constants
 import logger
 import numpy as np
 import torch as T
 import torch.optim as optim
+import utils
 
 from agent.net import CurvyNet
 
 OPTIMIZER_FILE = "out/optimizer.pt"
-LOSS_HISTORY_FILE = "out/train_loss_history"
 
 
 class PPOMemory:
@@ -202,13 +203,9 @@ class Agent:
 
     def save_loss_history(self, loss_history):
         # Read the loss history file first
-        data = []
-        if os.path.exists(LOSS_HISTORY_FILE):
-            with open(LOSS_HISTORY_FILE, "r") as f:
-                data = json.load(f)
+        data = utils.load_json(constants.TRAIN_LOSS_HISTORY_FILE, [])
 
         # Save the loss history
         data.append(loss_history)
-        with open(LOSS_HISTORY_FILE, "w") as f:
-            json.dump(data, f)
+        utils.save_json(constants.TRAIN_LOSS_HISTORY_FILE, data)
         logger.warning(f"Loss: {loss_history}")

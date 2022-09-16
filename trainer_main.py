@@ -13,21 +13,21 @@ from screen import INPUT_SHAPE, Account, Action
 from worker import WorkerProcess
 
 ACCOUNTS = [
-    # Account(
-    #     "jotocik870@nicoimg.com",
-    #     "DZA*vev-kvg3etx-twz",
-    #     "sarcatan's match",
-    #     "vQgJ3zaP",
-    #     True,
-    #     ("eafdorf",),
-    # ),
-    # Account(
-    #     "wheels.hallow_0g@icloud.com",
-    #     "8.h*oVJokU69.GuHyLMf",
-    #     "sarcatan's match",
-    #     "vQgJ3zaP",
-    #     False,
-    # ),
+    Account(
+        "jotocik870@nicoimg.com",
+        "DZA*vev-kvg3etx-twz",
+        "sarcatan's match",
+        "vQgJ3zaP",
+        True,
+        ("eafdorf",),
+    ),
+    Account(
+        "wheels.hallow_0g@icloud.com",
+        "8.h*oVJokU69.GuHyLMf",
+        "sarcatan's match",
+        "vQgJ3zaP",
+        False,
+    ),
     Account(
         "misstep.gills.0x@icloud.com",
         ".-.qqn@F@64eiwYk*Mao",
@@ -43,7 +43,7 @@ ACCOUNTS = [
 
 
 # Hyperparameters
-horizon = (256 + 1) * len(ACCOUNTS)  # Add 1 to account for last state in the trajectory
+horizon = (256 + 1) * 2  # Add 1 to account for last state in the trajectory
 lr = 0.0003
 n_epochs = 1  # 3 in the PPO paper, but based on Dota 2 paper, 1 is better (see sample reuse). Empirically verified.
 minibatch_size = 32

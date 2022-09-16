@@ -19,6 +19,8 @@ RANDOM_OLD_MODEL = 0.2
 
 KILL_AFTER_N_SECONDS = 60 * 3  # 3 minutes
 
+INITIAL_SLEEP = 2.75
+
 
 class WorkerProcess:
     def __init__(
@@ -142,24 +144,32 @@ class Worker:
             if not ready_to_play:
                 continue
             if just_started:
-                # Sleep for 8.75 seconds because the there's some initial splash screen
+                # Sleep for 6 seconds because the there's some initial splash screen
                 # when initially joining a match
-                await asyncio.sleep(8.75)
-            else:
-                # Wait until the game start countdown is over
-                await asyncio.sleep(2.75)
+                await asyncio.sleep(6)
+
+            # Randomize starting direction by turning left or right
+            # Wait until the game start countdown is over
+            # Turn speed is 180 degrees per second.
+            # We have 3 seconds before the game starts
+            sleep_time = random.random() * 2
+            rem_sleep = INITIAL_SLEEP - sleep_time
+            await asyncio.sleep(rem_sleep)
+            await game.step(Action.LEFT if random.random() < 0.5 else Action.RIGHT)
+            await asyncio.sleep(sleep_time)
 
             done = False
             n_steps_inner = 0
             start_time = time.time()
             round_reward = 0
             prev_state = np.zeros((1, *INPUT_SHAPE))
+            won = False
             while not done:
                 state = game.play_area
                 stacked = np.concatenate([prev_state, state], axis=0)
                 torch_state = torch.tensor([stacked], dtype=torch.float32).to(self.cpu)
                 action, prob, value = self.model.choose_action(torch_state)
-                reward, done = await game.step(Action(action))
+                reward, done, won = await game.step(Action(action))
                 n_steps_inner += 1
                 round_reward += reward
                 if not self.old_model_name:
@@ -171,6 +181,7 @@ class Worker:
             )
             self.log_reward(
                 {
+                    "won": won,
                     "reward": round_reward,
                     "time": elapsed,
                     "agent_name": self.old_model_name,

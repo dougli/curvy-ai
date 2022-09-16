@@ -1,4 +1,3 @@
-import math
 import os
 import random
 
@@ -10,7 +9,7 @@ import utils
 
 def old_agent_probs():
     old_agents_reward_history = utils.load_json(
-        constants.OLD_AGENTS_REWARD_HISTORY_FILE
+        constants.OLD_AGENTS_REWARD_HISTORY_FILE, default=[]
     )
 
     logits: dict[str, float] = {}
@@ -63,12 +62,12 @@ def select_old_agent():
 
 def win_loss_ratio():
     old_agents_reward_history = utils.load_json(
-        constants.OLD_AGENTS_REWARD_HISTORY_FILE
+        constants.OLD_AGENTS_REWARD_HISTORY_FILE, default=[]
     )
     wins = 0
     losses = 0
     for entry in old_agents_reward_history:
-        if entry["reward"] >= 0:
+        if entry["reward"] >= 10:
             wins += 1
         else:
             losses += 1
