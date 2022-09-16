@@ -141,9 +141,12 @@ class Worker:
             if not ready_to_play:
                 continue
             if just_started:
-                # Sleep for 6 seconds because the there's some initial splash screen
+                # Sleep for 8.75 seconds because the there's some initial splash screen
                 # when initially joining a match
-                await asyncio.sleep(6)
+                await asyncio.sleep(8.75)
+            else:
+                # Wait until the game start countdown is over
+                await asyncio.sleep(2.75)
 
             done = False
             n_steps_inner = 0
