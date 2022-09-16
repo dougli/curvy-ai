@@ -24,8 +24,8 @@ from pyppeteer.page import Page
 
 # =================================================== 6x
 VIEWPORT = {"width": 1920, "height": 1080}
-PLAY_AREA = Rect(x=810, y=0, w=648, h=1080)
-PLAY_AREA_SCALING_FACTOR = 6
+PLAY_AREA = Rect(x=816, y=0, w=600, h=1080)
+PLAY_AREA_SCALING_FACTOR = 10
 SCORE_HEIGHT = 41
 SCORE_AREA = Rect(x=253, y=66, w=41, h=SCORE_HEIGHT * 8)
 
@@ -43,7 +43,7 @@ SCORE_AREA = Rect(x=253, y=66, w=41, h=SCORE_HEIGHT * 8)
 # SCORE_HEIGHT = 27
 # SCORE_AREA = Rect(x=170, y=43, w=25, h=SCORE_HEIGHT * 8)
 
-PLAY_AREA_RESIZED = (180, 108)
+PLAY_AREA_RESIZED = (108, 60)
 assert PLAY_AREA.w / PLAY_AREA_SCALING_FACTOR == PLAY_AREA_RESIZED[1]
 assert PLAY_AREA.h / PLAY_AREA_SCALING_FACTOR == PLAY_AREA_RESIZED[0]
 
@@ -57,8 +57,8 @@ SCORE_STATE_THRESHOLD = 205
 IN_BLACK = 48
 IN_WHITE = 90
 
-REWARD_ALIVE_PER_SEC = 1  # Small bonus every second for staying alive
-REWARD_DEAD_PENALTY = -5  # Penalty for dying
+REWARD_ALIVE_PER_SEC = 0  # Small bonus every second for staying alive
+REWARD_DEAD_PENALTY = -10  # Penalty for dying
 
 INITIAL_SCORE = 10
 FPS_COUNTER_SIZE = 10
@@ -330,6 +330,7 @@ class Game:
             tuple[float, bool]: The reward and whether the game is over.
         """
         if not self.in_play:
+            logger.error("Calling 'step' when game is not in play!")
             return 0, True
 
         # Perform the input
@@ -344,8 +345,7 @@ class Game:
         if next_state.alive:
             self.last_alive = time.time()
         elif not next_state.dead and self.last_alive < time.time() - 1:
-            # We haven't seen the player alive in a while, likely because the opponent
-            # has died on the canvas. End the round.
+            logger.error("Player is not alive nor dead for 1 second. Ending round.")
             return 0, True
 
         # Calculate the reward
@@ -354,17 +354,22 @@ class Game:
         self.last_reward_time = now
 
         score_reward = 0
-        alive_reward = (
-            next_state.alive * REWARD_ALIVE_PER_SEC * elapsed
-            + next_state.dead * REWARD_DEAD_PENALTY
-        )
-
+        won = False
         if next_state.score != -1:
             score_reward = next_state.score - self.score
             self.score = next_state.score
+        if score_reward == 10:
+            won = True
+            # Wait 1 extra second for the UI to set the winning player to not alive
+            await asyncio.sleep(1)
+
+        alive_reward = (
+            next_state.alive * REWARD_ALIVE_PER_SEC * elapsed
+            + next_state.dead * REWARD_DEAD_PENALTY * (1 - won)
+        )
         final_reward = score_reward + alive_reward
 
-        return final_reward, next_state.dead
+        return final_reward, next_state.dead or won
 
     async def wait_for_alive(self) -> bool:
         """Wait for the player to be alive."""

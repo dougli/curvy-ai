@@ -122,8 +122,8 @@ class Agent:
     def backup_models(self):
         self.model.backup_checkpoint()
 
-    def load_models(self):
-        self.model.load_checkpoint()
+    def load_models(self) -> bool:
+        return self.model.load_checkpoint()
 
     def learn(self):
         memories = [m.export_for_learning() for m in self.memories]

@@ -71,8 +71,10 @@ class CurvyNet(nn.Module):
         if os.path.exists(filename):
             logger.success(f"Loading checkpoint from {filename}")
             self.load_state_dict(torch.load(filename))
+            return True
         else:
             logger.warning(f"Checkpoint file {filename} not found")
+            return False
 
     def backup_checkpoint(self):
         directory = os.path.join(os.path.dirname(__file__), "..", BACKUP_DIR)

@@ -103,9 +103,7 @@ class Worker:
         self.model.load_checkpoint()
 
         self.model_lock = mp.Lock()
-
-        self.model_name = None
-        self.using_old_model = False
+        self.old_model_name = None
 
     async def run(self):
         game = Game(
@@ -122,36 +120,30 @@ class Worker:
 
         asyncio.ensure_future(self._poll_receiver())
 
-        n_steps = 0
         episode = 0
         total_reward = 0
+        round_time = 0
         for _ in range(1000000):
             if not game.in_play:
                 if episode > 0:
-                    if self.using_old_model:
+                    if self.old_model_name:
                         self.log_reward(
-                            {
-                                "score": game.score,
-                                "steps": n_steps,
-                                "total_reward": total_reward,
-                            }
+                            {"score": game.score, "total_reward": total_reward}
                         )
                     else:
-                        self.log_reward(total_reward)
+                        self.log_reward(round_time)
                     logger.train_info(
-                        f"Episode {episode}, steps: {n_steps}, "
+                        f"Episode {episode}, total_round_time {round_time}, "
                         f"total_reward {total_reward}, "
                         f"game score {game.score}, fps {game.fps}"
                     )
 
                 self.model_lock.acquire()
                 if random.random() < RANDOM_OLD_MODEL:
-                    self.using_old_model = True
-                    self.model_name = self.model.load_random_backup()
-                elif self.using_old_model:
-                    self.using_old_model = False
+                    self.old_model_name = self.model.load_random_backup()
+                elif self.old_model_name:
                     self.model.load_checkpoint()
-                    self.model_name = None
+                    self.old_model_name = None
                 self.model_lock.release()
 
                 await game.skip_powerup()
@@ -160,31 +152,35 @@ class Worker:
                         await game.wait_for_player_ready(username)
                     await game.start_match()
                 await game.wait_for_start()
-                n_steps = 0
                 episode += 1
+                round_time = 0
                 total_reward = 0
 
             ready_to_play = await game.wait_for_alive()
             if not ready_to_play:
                 continue
+            if round_time == 0:
+                # Sleep for 5 seconds because the there's some initial splash screen
+                # when initially joining a match
+                await asyncio.sleep(5)
 
             done = False
             n_steps_inner = 0
-            start_inner = time.time()
+            start_round_time = time.time()
             round_reward = 0
             while not done:
                 state = game.play_area
                 torch_state = torch.tensor([state], dtype=torch.float32).to(self.cpu)
                 action, prob, value = self.model.choose_action(torch_state)
                 reward, done = await game.step(Action(action))
-                n_steps += 1
                 n_steps_inner += 1
                 round_reward += reward
-                if not self.using_old_model:
+                if not self.old_model_name:
                     self.remember(state, action, prob, value, reward, done)
             logger.train_info(
-                f"round reward: {round_reward}, time: {time.time() - start_inner}, FPS: {n_steps_inner / (time.time() - start_inner)}"
+                f"round reward: {round_reward}, time: {time.time() - start_round_time}, FPS: {n_steps_inner / (time.time() - start_round_time)}"
             )
+            round_time += time.time() - start_round_time
             total_reward += round_reward
             self.heartbeat()
 
@@ -198,7 +194,11 @@ class Worker:
 
     def log_reward(self, reward):
         self.sender.put(
-            {"type": "log_reward", "data": reward, "old_agent_name": self.model_name}
+            {
+                "type": "log_reward",
+                "data": reward,
+                "old_agent_name": self.old_model_name,
+            }
         )
 
     def heartbeat(self):
@@ -210,7 +210,7 @@ class Worker:
                 data = self.receiver.get(block=False)
                 if data["type"] == "update_model":
                     self.model_lock.acquire()
-                    if not self.using_old_model:
+                    if not self.old_model_name:
                         self.model.load_checkpoint()
                     self.model_lock.release()
             except Empty:
