@@ -5,6 +5,7 @@ import time
 from queue import Empty
 from typing import Callable
 
+import numpy as np
 import torch
 
 import logger
@@ -97,7 +98,7 @@ class Worker:
 
         self.cpu = torch.device("cpu")
 
-        self.model = CurvyNet((1, *INPUT_SHAPE), len(Action)).to(self.cpu)
+        self.model = CurvyNet((2, *INPUT_SHAPE), len(Action)).to(self.cpu)
         self.model.load_checkpoint()
 
         self.model_lock = mp.Lock()
@@ -152,15 +153,18 @@ class Worker:
             n_steps_inner = 0
             start_time = time.time()
             round_reward = 0
+            prev_state = np.zeros((1, *INPUT_SHAPE))
             while not done:
                 state = game.play_area
-                torch_state = torch.tensor([state], dtype=torch.float32).to(self.cpu)
+                stacked = np.concatenate([prev_state, state], axis=0)
+                torch_state = torch.tensor([stacked], dtype=torch.float32).to(self.cpu)
                 action, prob, value = self.model.choose_action(torch_state)
                 reward, done = await game.step(Action(action))
                 n_steps_inner += 1
                 round_reward += reward
                 if not self.old_model_name:
-                    self.remember(state, action, prob, value, reward, done)
+                    self.remember(stacked, action, prob, value, reward, done)
+                prev_state = state
             elapsed = time.time() - start_time
             logger.train_info(
                 f"round reward: {round_reward}, time: {elapsed}, FPS: {n_steps_inner / elapsed}"

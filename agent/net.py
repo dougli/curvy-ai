@@ -2,8 +2,10 @@ import os
 import time
 from typing import Optional
 
+import constants
 import logger
 import numpy as np
+import oldagents
 import torch
 from torch import nn
 
@@ -16,7 +18,7 @@ class CurvyNet(nn.Module):
         super(CurvyNet, self).__init__()
 
         self.shared = nn.Sequential(
-            nn.Conv2d(1, 32, kernel_size=8, stride=4),
+            nn.Conv2d(input_shape[0], 32, kernel_size=8, stride=4),
             nn.ReLU(),
             nn.Conv2d(32, 64, kernel_size=4, stride=2),
             nn.ReLU(),
@@ -85,16 +87,11 @@ class CurvyNet(nn.Module):
         torch.save(self.state_dict(), filename)
 
     def load_random_backup(self) -> Optional[str]:
-        directory = os.path.join(os.path.dirname(__file__), "..", BACKUP_DIR)
-        if not os.path.exists(directory):
-            logger.warning(f"No backups found in {directory}")
+        filename = oldagents.select_old_agent()
+        if not filename:
+            logger.warning(f"No backups found in {constants.BACKUP_DIR}")
             return None
-        backups = os.listdir(directory)
-        if not backups:
-            logger.warning(f"No backups found in {directory}")
-            return None
-        filename = np.random.choice(backups)
-        filepath = os.path.join(directory, filename)
+        filepath = os.path.join(constants.BACKUP_DIR, filename)
         logger.success(f"Loading backup from {filename}")
         self.load_state_dict(torch.load(filepath))
         return filename

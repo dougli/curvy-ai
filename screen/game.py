@@ -236,45 +236,42 @@ class Game:
         logger.info("Game started!")
 
     @property
-    def play_area(self) -> Optional[np.ndarray]:
+    def play_area(self) -> np.ndarray:
         screen = self.screen
-        if screen is not None:
-            # Crop
-            image = screen[
-                PLAY_AREA.y : PLAY_AREA.y + PLAY_AREA.h,
-                PLAY_AREA.x : PLAY_AREA.x + PLAY_AREA.w,
-            ]
+        assert screen is not None
+        # Crop
+        image = screen[
+            PLAY_AREA.y : PLAY_AREA.y + PLAY_AREA.h,
+            PLAY_AREA.x : PLAY_AREA.x + PLAY_AREA.w,
+        ]
 
-            # Convert to grayscale
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        # Convert to grayscale
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-            # Resize
-            image = (
-                image.reshape(
-                    PLAY_AREA_RESIZED[0],
-                    PLAY_AREA_SCALING_FACTOR,
-                    PLAY_AREA_RESIZED[1],
-                    PLAY_AREA_SCALING_FACTOR,
-                )
-                .mean(-1, dtype=np.float32)
-                .mean(1, dtype=np.float32)
+        # Resize
+        image = (
+            image.reshape(
+                PLAY_AREA_RESIZED[0],
+                PLAY_AREA_SCALING_FACTOR,
+                PLAY_AREA_RESIZED[1],
+                PLAY_AREA_SCALING_FACTOR,
             )
+            .mean(-1, dtype=np.float32)
+            .mean(1, dtype=np.float32)
+        )
 
-            # Clip away the background
-            image = np.clip(
-                (image - IN_BLACK) * (255.0 / (IN_WHITE - IN_BLACK)), 0, 255.0
-            )
+        # Clip away the background
+        image = np.clip((image - IN_BLACK) * (255.0 / (IN_WHITE - IN_BLACK)), 0, 255.0)
 
-            if self.show_play_area:
-                cv2.imshow("image", image.astype(np.uint8))
-                cv2.waitKey(1)
+        if self.show_play_area:
+            cv2.imshow("image", image.astype(np.uint8))
+            cv2.waitKey(1)
 
-            # Rescale to 0-1 and return as 3D array (for compatibility with the
-            # neural network).
-            image = image / 255.0
-            image = np.expand_dims(image, axis=(0))
-            return image
-        return None
+        # Rescale to 0-1 and return as 3D array (for compatibility with the
+        # neural network).
+        image = image / 255.0
+        image = np.expand_dims(image, axis=(0))
+        return image
 
     @cached_property
     def player(self) -> Player:

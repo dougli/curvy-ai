@@ -99,7 +99,7 @@ class Agent:
         self.vf_coeff = vf_coeff
         self.entropy_coeff = entropy_coeff
 
-        self.model = CurvyNet((1, *input_shape), n_actions).to(device)
+        self.model = CurvyNet((2, *input_shape), n_actions).to(device)
         self.memories = [PPOMemory(gamma, gae_lambda) for _ in range(n_agents)]
         self.device = device
 

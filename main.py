@@ -23,7 +23,7 @@ async def main():
     cpu = torch.device("cpu")
     torch.set_num_threads(N_GAME_THREADS)
 
-    model = CurvyNet((1, *INPUT_SHAPE), len(Action)).to(cpu)
+    model = CurvyNet((2, *INPUT_SHAPE), len(Action)).to(cpu)
     model.load_checkpoint()
 
     trainer = TrainerProcess(on_model_update=model.load_checkpoint)
