@@ -43,9 +43,9 @@ ACCOUNTS = [
 
 
 # Hyperparameters
-horizon = (256 + 1) * 2  # Add 1 to account for last state in the trajectory
+horizon = 256 + len(ACCOUNTS) + 1  # Add 1 to account for last state in the trajectory
 lr = 0.0003
-n_epochs = 1  # 3 in the PPO paper, but based on Dota 2 paper, 1 is better (see sample reuse). Empirically verified.
+n_epochs = 3  # 3 in the PPO paper, but based on Dota 2 paper, 1 is better (see sample reuse). Empirically verified.
 minibatch_size = 32
 gamma = 0.99
 gae_lambda = 0.95
@@ -53,7 +53,7 @@ policy_clip = 0.2
 vf_coeff = 1
 entropy_coeff = 0.01
 
-SAVE_MODEL_EVERY_N_TRAINS = 10
+SAVE_MODEL_EVERY_N_TRAINS = 30
 N_TRAINING_THREADS = 4
 REWARD_HISTORY_FILE = "out/reward_history.json"
 OLD_AGENTS_REWARD_HISTORY_FILE = "out/old_agents_reward_history.json"

@@ -23,8 +23,7 @@ def old_agent_probs():
             else:
                 logits[agent] = max([*logits.values()])
 
-        win = entry["reward"] >= 0
-        if not win:
+        if not entry["won"]:
             prob = np.exp(logits[agent]) / np.sum(np.exp([*logits.values()]))
             logits[agent] -= 0.01 / (len(logits) * prob)
 
@@ -36,7 +35,6 @@ def old_agent_probs():
                 logits[agent] = 0
             else:
                 logits[agent] = max([*logits.values()])
-            print(logits)
     total_prob = np.sum(np.exp([*logits.values()]))
     probs = {agent: np.exp(logits[agent]) / total_prob for agent in logits}
     return probs
@@ -67,8 +65,24 @@ def win_loss_ratio():
     wins = 0
     losses = 0
     for entry in old_agents_reward_history:
-        if entry["reward"] >= 10:
+        if entry["won"]:
             wins += 1
         else:
             losses += 1
     return {"losses": wins, "wins": losses}
+
+
+def win_loss_ratio_per_agent():
+    old_agents_reward_history = utils.load_json(
+        constants.OLD_AGENTS_REWARD_HISTORY_FILE, default=[]
+    )
+    agents = {}
+    for entry in old_agents_reward_history:
+        agent = entry["agent_name"]
+        if agent not in agents:
+            agents[agent] = {"losses": 0, "wins": 0}
+        if entry["won"]:
+            agents[agent]["wins"] += 1
+        else:
+            agents[agent]["losses"] += 1
+    return agents

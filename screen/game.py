@@ -4,7 +4,7 @@ import collections
 import os
 import time
 from functools import cached_property
-from typing import Any, Optional
+from typing import Any
 
 import cv2
 import logger
@@ -20,7 +20,6 @@ os.environ["PYPPETEER_CHROMIUM_REVISION"] = "1012729"
 import pyppeteer
 import pyppeteer.errors
 from pyppeteer import launch
-from pyppeteer.page import Page
 
 # =================================================== 6x
 VIEWPORT = {"width": 1920, "height": 1080}
@@ -328,7 +327,7 @@ class Game:
         """
         if not self.in_play:
             logger.error("Calling 'step' when game is not in play!")
-            return 0, True
+            return 0, True, False
 
         # Perform the input
         await self.set_action(action)
