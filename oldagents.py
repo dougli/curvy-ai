@@ -6,6 +6,8 @@ import numpy as np
 import constants
 import utils
 
+OLD_AGENT_LEARN_RATE = 0.03
+
 
 def old_agent_probs():
     old_agents_reward_history = utils.load_json(
@@ -25,7 +27,7 @@ def old_agent_probs():
 
         if not entry["won"]:
             prob = np.exp(logits[agent]) / np.sum(np.exp([*logits.values()]))
-            logits[agent] -= 0.01 / (len(logits) * prob)
+            logits[agent] -= OLD_AGENT_LEARN_RATE / (len(logits) * prob)
 
     # If there is an agent that hasn't been played yet, initialize it to the max chance
     available_old_agents = list_old_agents()
