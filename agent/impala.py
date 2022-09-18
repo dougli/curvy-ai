@@ -10,7 +10,6 @@ import torch
 from torch import nn
 
 CHECKPOINT_FILE = "out/model_checkpoint"
-BACKUP_DIR = "out/backups"
 
 
 class ImpalaCNN(nn.Module):
@@ -130,10 +129,11 @@ class ImpalaCNN(nn.Module):
             return False
 
     def backup_checkpoint(self):
-        directory = os.path.join(os.path.dirname(__file__), "..", BACKUP_DIR)
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-        filename = os.path.join(directory, f"model_checkpoint_{int(time.time())}")
+        if not os.path.exists(constants.BACKUP_DIR):
+            os.makedirs(constants.BACKUP_DIR)
+        filename = os.path.join(
+            constants.BACKUP_DIR, f"model_checkpoint_{int(time.time())}"
+        )
         logger.success(f"Backing up checkpoint to {filename}")
         torch.save(self.state_dict(), filename)
 

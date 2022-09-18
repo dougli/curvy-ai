@@ -9,7 +9,7 @@ import numpy as np
 import torch
 
 import logger
-from agent import CurvyNet
+from agent import ImpalaCNN
 from screen import INPUT_SHAPE, Account, Action, Game
 
 N_GAME_THREADS = 2
@@ -100,7 +100,7 @@ class Worker:
 
         self.cpu = torch.device("cpu")
 
-        self.model = CurvyNet((2, *INPUT_SHAPE), len(Action)).to(self.cpu)
+        self.model = ImpalaCNN((2, *INPUT_SHAPE), len(Action)).to(self.cpu)
         self.model.load_checkpoint()
 
         self.model_lock = mp.Lock()
