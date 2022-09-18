@@ -152,11 +152,12 @@ class Worker:
             # Wait until the game start countdown is over
             # Turn speed is 180 degrees per second.
             # We have 3 seconds before the game starts
-            sleep_time = random.random() * 2
-            rem_sleep = INITIAL_SLEEP - sleep_time
-            await asyncio.sleep(rem_sleep)
-            await game.step(Action.LEFT if random.random() < 0.5 else Action.RIGHT)
-            await asyncio.sleep(sleep_time)
+            # sleep_time = random.random() * 2
+            # rem_sleep = INITIAL_SLEEP - sleep_time
+            # await asyncio.sleep(rem_sleep)
+            # await game.step(Action.LEFT if random.random() < 0.5 else Action.RIGHT)
+            # await asyncio.sleep(sleep_time)
+            await asyncio.sleep(INITIAL_SLEEP)
             game.update_last_reward_time()
 
             done = False
