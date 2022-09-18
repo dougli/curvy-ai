@@ -3,12 +3,12 @@ import numpy as np
 
 import constants
 import utils
-from agent import CurvyNet
+from agent import ImpalaCNN
 from screen import INPUT_SHAPE, Action
 
 
 def conv_0_filters():
-    model = CurvyNet((2, *INPUT_SHAPE), len(Action))
+    model = ImpalaCNN((2, *INPUT_SHAPE), len(Action))
     model.load_checkpoint()
 
     weights: np.ndarray = model.shared[0].weight.detach().numpy()  # type: ignore
