@@ -74,7 +74,10 @@ class ImpalaCNN(nn.Module):
             nn.Linear(self._get_conv_out(input_shape), 256),
             nn.ReLU(),
         )
-        self.actor = nn.Linear(256, n_actions)
+        self.actor = nn.Sequential(
+            nn.Linear(256, n_actions),
+            nn.Softmax(dim=-1),
+        )
         self.critic = nn.Linear(256, 1)
 
     def _get_conv_out(self, shape):
