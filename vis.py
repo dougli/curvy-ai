@@ -60,6 +60,7 @@ def training_loss():
     plt.plot(x, critic_loss, label="Critic Loss")
     plt.plot(x, running_avg(critic_loss), label="Critic loss avg")
     plt.plot(x, entropy_loss, label="Entropy")
+    plt.plot(x, running_avg(entropy_loss), label="Entropy avg")
     plt.title("Training Loss")
     plt.legend()
     plt.show()

@@ -380,6 +380,9 @@ class Game:
             async with self.screen_lock:
                 await self.screen_lock.wait()
 
+    def update_last_reward_time(self) -> None:
+        self.last_reward_time = time.time()
+
     async def close(self):
         self.cdp.send("Page.stopScreencast")
         await self.cdp.detach()
