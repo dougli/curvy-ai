@@ -7,7 +7,7 @@ import torch as T
 import torch.optim as optim
 import utils
 
-from agent import ImpalaCNN
+from .impala import ImpalaCNN
 
 OPTIMIZER_FILE = "out/optimizer.pt"
 
