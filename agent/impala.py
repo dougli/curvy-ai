@@ -70,6 +70,7 @@ class ImpalaCNN(nn.Module):
         self.resnet2 = nn.ModuleList(self.resnet2)
 
         self.fc = nn.Sequential(
+            nn.Flatten(),
             nn.ReLU(),
             nn.Linear(self._get_conv_out(input_shape), 256),
             nn.ReLU(),
@@ -86,7 +87,6 @@ class ImpalaCNN(nn.Module):
 
     def forward(self, x: torch.Tensor):
         x = self._forward_conv(x)
-        x = x.flatten()
         x = self.fc(x)
 
         value = self.critic(x)
