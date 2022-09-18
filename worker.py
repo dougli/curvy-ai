@@ -15,7 +15,7 @@ from screen import INPUT_SHAPE, Account, Action, Game
 N_GAME_THREADS = 2
 CURVE_FEVER = "https://curvefever.pro"
 
-RANDOM_OLD_MODEL = 0.2
+RANDOM_OLD_MODEL = 0.1
 
 KILL_AFTER_N_SECONDS = 60 * 3  # 3 minutes
 
@@ -157,6 +157,7 @@ class Worker:
             await asyncio.sleep(rem_sleep)
             await game.step(Action.LEFT if random.random() < 0.5 else Action.RIGHT)
             await asyncio.sleep(sleep_time)
+            game.update_last_reward_time()
 
             done = False
             n_steps_inner = 0
