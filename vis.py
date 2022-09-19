@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import constants
+import oldagents
 import utils
 from agent import ImpalaCNN
 from screen import INPUT_SHAPE, Action
@@ -44,7 +45,7 @@ def reward():
     rewards = [h["reward"] for h in reward_history]
 
     plt.plot(x, rewards, label="Reward")
-    plt.plot(x, running_avg(rewards), label="Running Avg (100)")
+    plt.plot(x, running_avg(rewards, n=500), label="Running Avg (100)")
     plt.title("Reward")
     plt.show()
 
@@ -80,3 +81,26 @@ def running_avg(values, n=100):
     for i in range(len(values)):
         running_avg[i] = np.mean(values[max(0, i - n) : (i + 1)])
     return running_avg
+
+
+def simulate_random_old_agents(n=100, matches_each=15, lr=0.05):
+    logits = []
+    for i in range(n):
+        logits.append(0 if i == 0 else max(logits))
+
+        # Randomly play some games
+        for j in range(matches_each):
+            # Select an old agent using softmax probs
+            probs = np.exp(logits) / np.sum(np.exp(logits))
+            idx = np.random.choice(i + 1, p=probs)
+            if np.random.randint(0, 2) == 1:
+                logits[idx] = logits[idx] - lr / (len(logits) * probs[idx])
+
+    probs = np.exp(logits) / np.sum(np.exp(logits))
+    return probs
+
+
+def old_agents_probability(probs):
+    x = np.arange(len(probs))
+    plt.bar(x, [*probs.values()])
+    plt.show()
