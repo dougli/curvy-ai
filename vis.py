@@ -11,14 +11,14 @@ def conv_0_filters():
     model = ImpalaCNN((2, *INPUT_SHAPE), len(Action))
     model.load_checkpoint()
 
-    weights: np.ndarray = model.shared[0].weight.detach().numpy()  # type: ignore
+    weights: np.ndarray = model.feat_convs[0][0].weight.detach().numpy()  # type: ignore
     weights = weights.squeeze()
-    figure, axarr = plt.subplots(4 * 2, 8)
+    figure, axarr = plt.subplots(4 * 2, 4)
 
     for row in range(4):
         for frame in range(2):
-            for col in range(8):
-                axarr[row * 2 + frame][col].imshow(weights[row * 8 + col][frame])
+            for col in range(4):
+                axarr[row * 2 + frame][col].imshow(weights[row * 4 + col][frame])
                 axarr[row * 2 + frame][col].axis("off")
     figure.show()
 
