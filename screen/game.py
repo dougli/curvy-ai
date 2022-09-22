@@ -137,7 +137,7 @@ class Game:
         # Dismiss an annoying popup that sometimes shows up.
         logger.info("Dismissing annoying popup...")
         try:
-            await self.page.waitForSelector(".popup__x-button", timeout=5000)
+            await self.page.waitForSelector(".popup__x-button", timeout=10000)
             button = await self.page.querySelector(".popup__x-button")
             if button:
                 await button.click()
@@ -164,6 +164,13 @@ class Game:
             "//button[contains(., 'CREATE MATCH')]/div[contains(@class, 'c-button-content')]"
         )
         await button[0].click()  # Click the final "CREATE MATCH" button.
+
+        # Wait for an ad to complete, which is usually 30 seconds.
+        logger.info("Waiting for ad to complete (takes over 30s)...")
+        await asyncio.sleep(5)
+        await self.page.waitForSelector(
+            ".fullscreen-ad-container", hidden=True, timeout=40000
+        )
 
     async def join_match(self) -> None:
         # Click the "JOIN MATCH" button.
@@ -192,13 +199,6 @@ class Game:
         await button[0].click()  # Click the final "JOIN MATCH" button.
 
     async def skip_powerup(self) -> None:
-        # Wait for an ad to complete, which is usually 30 seconds.
-        logger.info("Waiting for ad to complete (takes over 30s)...")
-        await asyncio.sleep(5)
-        await self.page.waitForSelector(
-            ".fullscreen-ad-container", hidden=True, timeout=40000
-        )
-
         logger.info("Checking to make sure we are not a spectator...")
         try:
             await self.page.waitForXPath(

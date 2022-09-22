@@ -110,7 +110,7 @@ class Worker:
         game = Game(
             self.account.match_name,
             self.account.match_password,
-            show_play_area=self.account.is_host,
+            show_screen=True,
         )
         await game.launch(CURVE_FEVER)
         await game.login(self.account.email, self.account.password)

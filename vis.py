@@ -26,26 +26,26 @@ def conv_0_filters():
     return weights
 
 
-def time_alive():
+def time_alive(avg_n=500):
     reward_history = utils.load_json(constants.REWARD_HISTORY_FILE, default=[])
 
     x = np.arange(len(reward_history))
     time_alive = [h["time"] for h in reward_history]
 
     plt.plot(x, time_alive, label="Time alive")
-    plt.plot(x, running_avg(time_alive), label="Running Avg (100)")
+    plt.plot(x, running_avg(time_alive, n=avg_n), label="Running Avg (100)")
     plt.title("Time alive")
     plt.show()
 
 
-def reward():
+def reward(avg_n=500):
     reward_history = utils.load_json(constants.REWARD_HISTORY_FILE, default=[])
 
     x = np.arange(len(reward_history))
     rewards = [h["reward"] for h in reward_history]
 
     plt.plot(x, rewards, label="Reward")
-    plt.plot(x, running_avg(rewards, n=500), label="Running Avg (100)")
+    plt.plot(x, running_avg(rewards, n=avg_n), label="Running Avg (100)")
     plt.title("Reward")
     plt.show()
 
