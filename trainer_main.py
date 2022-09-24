@@ -115,12 +115,12 @@ class Trainer:
 
         while True:
             await asyncio.sleep(10)
-            # for i, worker in enumerate(self.workers):
-            #     if not worker.alive:
-            #         first = int(i / 2) * 2
-            #         second = int(i / 2) * 2 + 1
-            #         self.reload_worker(first)
-            #         self.reload_worker(second)
+            for i, worker in enumerate(self.workers):
+                if not worker.alive:
+                    first = int(i / 2) * 2
+                    second = int(i / 2) * 2 + 1
+                    self.reload_worker(first)
+                    self.reload_worker(second)
 
     def reload_worker(self, idx: int):
         self.workers[idx].reload()

@@ -92,6 +92,7 @@ class Game:
         self.score = INITIAL_SCORE
         self.last_reward_time = 0
         self.last_alive = 0
+        self.wait_for_end_task = None
 
     async def launch(self, url: str) -> None:
         args = pyppeteer.defaultArgs({"headless": self.headless})
@@ -233,6 +234,13 @@ class Game:
         self.score = INITIAL_SCORE
         self.wait_for_end_task = asyncio.ensure_future(self._wait_for_game_end())
         logger.info("Game started!")
+
+    async def reload(self) -> None:
+        if self.wait_for_end_task:
+            self.wait_for_end_task.cancel()
+        await self.page.reload()
+        self.in_play = False
+        self.score = INITIAL_SCORE
 
     @property
     def play_area(self) -> np.ndarray:

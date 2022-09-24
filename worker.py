@@ -113,7 +113,10 @@ class Worker:
 
         asyncio.ensure_future(self._poll_receiver())
 
-        await self.main_loop()
+        self.main_loop_task = asyncio.create_task(self.main_loop())
+
+        while True:
+            await asyncio.sleep(1)
 
     async def main_loop(self):
         if self.account.is_host:
@@ -206,8 +209,10 @@ class Worker:
                         self.model.load_checkpoint()
                     self.model_lock.release()
                 elif data["type"] == "reload":
-                    # self.game.on_reload()
-                    raise NotImplementedError()
+                    logger.warning("Reloading worker, cancelling previous main loop")
+                    self.main_loop_task.cancel()
+                    await self.game.reload()
+                    self.main_loop_task = asyncio.create_task(self.main_loop())
             except Empty:
                 await asyncio.sleep(0.25)
 
