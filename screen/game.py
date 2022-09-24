@@ -231,7 +231,7 @@ class Game:
         await self.page.waitForSelector("canvas", timeout=60000)
         self.in_play = True
         self.score = INITIAL_SCORE
-        asyncio.ensure_future(self._wait_for_game_end())
+        self.wait_for_end_task = asyncio.ensure_future(self._wait_for_game_end())
         logger.info("Game started!")
 
     @property
@@ -442,21 +442,28 @@ class Game:
 
     async def _wait_for_game_end(self):
         # Wait indefinitely for the game to end.
-        wait_for_canvas = self.page.waitForSelector("canvas", hidden=True, timeout=0)
-        wait_for_rematch = self.page.waitForSelector(".rematch-container", timeout=0)
+        try:
+            wait_for_canvas = self.page.waitForSelector(
+                "canvas", hidden=True, timeout=0
+            )
+            wait_for_rematch = self.page.waitForSelector(
+                ".rematch-container", timeout=0
+            )
 
-        done, pending = await asyncio.wait(
-            [wait_for_canvas, wait_for_rematch], return_when=asyncio.FIRST_COMPLETED
-        )
-        self.in_play = False
-        for task in pending:
-            task.cancel()
-        await self.set_action(Action.NOTHING)
+            done, pending = await asyncio.wait(
+                [wait_for_canvas, wait_for_rematch], return_when=asyncio.FIRST_COMPLETED
+            )
+            self.in_play = False
+            for task in pending:
+                task.cancel()
+            await self.set_action(Action.NOTHING)
 
-        if wait_for_rematch in done:
-            logger.warning("Game ended smoothly! Starting a new game...")
-        else:
-            logger.warning("Game ended! Starting a new game...")
+            if wait_for_rematch in done:
+                logger.warning("Game ended smoothly! Starting a new game...")
+            else:
+                logger.warning("Game ended! Starting a new game...")
 
-        await asyncio.sleep(1)
-        await self.page.click(".rematch-container")
+            await asyncio.sleep(1)
+            await self.page.click(".rematch-container")
+        except asyncio.CancelledError:
+            logger.warning(f"Cancelled task to wait for game end.")

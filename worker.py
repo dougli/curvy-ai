@@ -17,7 +17,8 @@ CURVE_FEVER = "https://curvefever.pro"
 
 RANDOM_OLD_MODEL = 0.1
 
-KILL_AFTER_N_SECONDS = 60 * 3  # 3 minutes
+MAX_IDLE_TIME = 60  # 1 minute
+INITIAL_IDLE_TIME = 60 * 2  # 2 minutes
 
 INITIAL_SLEEP = 2.75
 
@@ -47,29 +48,18 @@ class WorkerProcess:
             ),
         )
 
-        self.to_kill = False
-        self.last_message = time.time()
+        self.last_message = time.time() + INITIAL_IDLE_TIME
         self.process.start()
         asyncio.ensure_future(self._poll_receiver())
 
     @property
     def alive(self):
-        return self.process.is_alive()
-
-    def kill(self):
-        self.to_kill = True
+        return (
+            self.last_message > time.time() - MAX_IDLE_TIME and self.process.is_alive()
+        )
 
     async def _poll_receiver(self):
         while True:
-            if self.to_kill or time.time() - self.last_message > KILL_AFTER_N_SECONDS:
-                logger.error(f"Killing worker {self.id}")
-                self.process.terminate()
-                await asyncio.sleep(5)
-                self.process.kill()
-                self.process.join()
-                self.process.close()
-                return
-
             try:
                 while True:
                     message = self.receiver.get(block=False)
@@ -83,6 +73,11 @@ class WorkerProcess:
 
     def update_model(self):
         self.sender.put({"type": "update_model"})
+
+    def reload(self):
+        logger.error(f"Reloading worker {self.id}")
+        self.sender.put({"type": "reload"})
+        self.last_message = time.time() + INITIAL_IDLE_TIME
 
 
 class Worker:
@@ -106,30 +101,35 @@ class Worker:
         self.model_lock = mp.Lock()
         self.old_model_name = None
 
-    async def run(self):
-        game = Game(
+        self.game = Game(
             self.account.match_name,
             self.account.match_password,
             show_screen=True,
         )
-        await game.launch(CURVE_FEVER)
-        await game.login(self.account.email, self.account.password)
-        if self.account.is_host:
-            await game.create_match()
-        else:
-            await game.join_match()
+
+    async def run(self):
+        await self.game.launch(CURVE_FEVER)
+        await self.game.login(self.account.email, self.account.password)
 
         asyncio.ensure_future(self._poll_receiver())
 
+        await self.main_loop()
+
+    async def main_loop(self):
+        if self.account.is_host:
+            await self.game.create_match()
+        else:
+            await self.game.join_match()
+
         just_started = True
         for _ in range(1000000):
-            if not game.in_play:
-                await game.skip_powerup()
+            if not self.game.in_play:
+                await self.game.skip_powerup()
                 if self.account.is_host:
                     for username in self.account.wait_for:
-                        await game.wait_for_player_ready(username)
-                    await game.start_match()
-                await game.wait_for_start()
+                        await self.game.wait_for_player_ready(username)
+                    await self.game.start_match()
+                await self.game.wait_for_start()
                 just_started = True
 
             self.model_lock.acquire()
@@ -140,7 +140,7 @@ class Worker:
                 self.old_model_name = None
             self.model_lock.release()
 
-            ready_to_play = await game.wait_for_alive()
+            ready_to_play = await self.game.wait_for_alive()
             if not ready_to_play:
                 continue
             if just_started:
@@ -148,17 +148,8 @@ class Worker:
                 # when initially joining a match
                 await asyncio.sleep(6)
 
-            # Randomize starting direction by turning left or right
-            # Wait until the game start countdown is over
-            # Turn speed is 180 degrees per second.
-            # We have 3 seconds before the game starts
-            # sleep_time = random.random() * 2
-            # rem_sleep = INITIAL_SLEEP - sleep_time
-            # await asyncio.sleep(rem_sleep)
-            # await game.step(Action.LEFT if random.random() < 0.5 else Action.RIGHT)
-            # await asyncio.sleep(sleep_time)
             await asyncio.sleep(INITIAL_SLEEP)
-            game.update_last_reward_time()
+            self.game.update_last_reward_time()
 
             done = False
             n_steps_inner = 0
@@ -167,11 +158,11 @@ class Worker:
             prev_state = np.zeros((1, *INPUT_SHAPE))
             won = False
             while not done:
-                state = game.play_area
+                state = self.game.play_area
                 stacked = np.concatenate([prev_state, state], axis=0)
                 torch_state = torch.tensor([stacked], dtype=torch.float32).to(self.cpu)
                 action, prob, value = self.model.choose_action(torch_state)
-                reward, done, won = await game.step(Action(action))
+                reward, done, won = await self.game.step(Action(action))
                 n_steps_inner += 1
                 round_reward += reward
                 if not self.old_model_name:
@@ -214,6 +205,9 @@ class Worker:
                     if not self.old_model_name:
                         self.model.load_checkpoint()
                     self.model_lock.release()
+                elif data["type"] == "reload":
+                    # self.game.on_reload()
+                    raise NotImplementedError()
             except Empty:
                 await asyncio.sleep(0.25)
 

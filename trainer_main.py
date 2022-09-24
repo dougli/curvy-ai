@@ -119,15 +119,12 @@ class Trainer:
             #     if not worker.alive:
             #         first = int(i / 2) * 2
             #         second = int(i / 2) * 2 + 1
-            #         self.restart_worker(first)
-            #         self.restart_worker(second)
+            #         self.reload_worker(first)
+            #         self.reload_worker(second)
 
-    def restart_worker(self, idx: int):
-        self.workers[idx].kill()
+    def reload_worker(self, idx: int):
+        self.workers[idx].reload()
         self.agent.purge_memory(idx)
-        self.workers[idx] = WorkerProcess(
-            idx, ACCOUNTS[idx], self.remember, self.log_reward
-        )
 
     def remember(self, id, state, action, probs, vals, reward, done):
         self.agent.remember(id, state, action, probs, vals, reward, done)
