@@ -212,6 +212,7 @@ class Worker:
                     logger.warning("Reloading worker, cancelling previous main loop")
                     self.main_loop_task.cancel()
                     await self.game.reload()
+                    await asyncio.sleep(10)  # Wait for the game to load
                     self.main_loop_task = asyncio.create_task(self.main_loop())
             except Empty:
                 await asyncio.sleep(0.25)

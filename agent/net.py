@@ -10,7 +10,6 @@ import torch
 from torch import nn
 
 CHECKPOINT_FILE = "out/model_checkpoint"
-BACKUP_DIR = "out/backups"
 
 
 class CurvyNet(nn.Module):
@@ -79,7 +78,7 @@ class CurvyNet(nn.Module):
             return False
 
     def backup_checkpoint(self):
-        directory = os.path.join(os.path.dirname(__file__), "..", BACKUP_DIR)
+        directory = os.path.join(os.path.dirname(__file__), "..", constants.BACKUP_DIR)
         if not os.path.exists(directory):
             os.makedirs(directory)
         filename = os.path.join(directory, f"model_checkpoint_{int(time.time())}")

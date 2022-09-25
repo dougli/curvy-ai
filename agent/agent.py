@@ -1,4 +1,5 @@
 import os
+import time
 
 import constants
 import logger
@@ -121,6 +122,12 @@ class Agent:
 
     def backup_models(self):
         self.model.backup_checkpoint()
+        # Save the optimizer in the backup dir
+        filepath = os.path.join(
+            constants.BACKUP_DIR, f"optimizer_checkpoint_{int(time.time())}"
+        )
+        logger.success(f"Backing up optimizer to {filepath}")
+        T.save(self.optimizer.state_dict(), filepath)
 
     def load_models(self) -> bool:
         return self.model.load_checkpoint()
