@@ -49,6 +49,7 @@ def list_old_agents() -> list[str]:
     backups = os.listdir(directory)
     if ".DS_Store" in backups:
         backups.remove(".DS_Store")
+    backups = [backup for backup in backups if backup.startswith("model_checkpoint")]
     return backups
 
 
