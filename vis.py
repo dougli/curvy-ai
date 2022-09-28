@@ -1,8 +1,10 @@
+from audioop import avg
+
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
 import constants
-import oldagents
 import utils
 from agent import ImpalaCNN
 from screen import INPUT_SHAPE, Action
@@ -30,10 +32,10 @@ def time_alive(avg_n=500):
     reward_history = utils.load_json(constants.REWARD_HISTORY_FILE, default=[])
 
     x = np.arange(len(reward_history))
-    time_alive = [h["time"] for h in reward_history]
+    series = pd.Series([h["time"] for h in reward_history])
 
-    plt.plot(x, time_alive, label="Time alive")
-    plt.plot(x, running_avg(time_alive, n=avg_n), label="Running Avg (100)")
+    series.plot(label="Time alive")
+    series.rolling(avg_n).mean().plot(label=f"Running avg ({avg_n})")
     plt.title("Time alive")
     plt.show()
 
@@ -42,26 +44,31 @@ def reward(avg_n=500):
     reward_history = utils.load_json(constants.REWARD_HISTORY_FILE, default=[])
 
     x = np.arange(len(reward_history))
-    rewards = [h["reward"] for h in reward_history]
+    series = pd.Series([h["reward"] for h in reward_history])
 
-    plt.plot(x, rewards, label="Reward")
-    plt.plot(x, running_avg(rewards, n=avg_n), label="Running Avg (100)")
-    plt.title("Reward")
+    mean = series.rolling(avg_n).mean()
+
+    # Subtract 10 from the stdev due to the win/loss difference
+    std = series.rolling(avg_n).std() - 10
+
+    mean.plot()
+    plt.title(f"Average reward over {avg_n} games")
+    plt.fill_between(x, mean - std, mean + std, alpha=0.5)  # type: ignore
     plt.show()
 
 
-def training_loss():
+def training_loss(window=10):
     training_history = utils.load_json(constants.TRAIN_LOSS_HISTORY_FILE, default=[])
     x = np.arange(len(training_history))
-    actor_loss = [h["actor_loss"] for h in training_history]
-    critic_loss = [h["critic_loss"] for h in training_history]
-    entropy_loss = [h["entropy_loss"] for h in training_history]
-    plt.plot(x, actor_loss, label="Actor Loss")
-    plt.plot(x, running_avg(actor_loss), label="Actor loss avg")
-    plt.plot(x, critic_loss, label="Critic Loss")
-    plt.plot(x, running_avg(critic_loss), label="Critic loss avg")
-    plt.plot(x, entropy_loss, label="Entropy")
-    plt.plot(x, running_avg(entropy_loss), label="Entropy avg")
+    actor_loss = pd.Series([h["actor_loss"] for h in training_history])
+    critic_loss = pd.Series([h["critic_loss"] for h in training_history])
+    entropy = pd.Series([h["entropy_loss"] for h in training_history])
+    actor_loss.plot(label="Actor Loss")
+    actor_loss.rolling(window).mean().plot(label=f"Actor loss avg")
+    critic_loss.plot(label="Critic Loss")
+    critic_loss.rolling(window).mean().plot(label=f"Critic loss avg")
+    entropy.plot(label="Entropy")
+    entropy.rolling(window).mean().plot(label=f"Entropy avg")
     plt.title("Training Loss")
     plt.legend()
     plt.show()
@@ -74,13 +81,6 @@ def total_time_played():
         total_time += entry["time"]
 
     return total_time
-
-
-def running_avg(values, n=100):
-    running_avg = np.zeros(len(values))
-    for i in range(len(values)):
-        running_avg[i] = np.mean(values[max(0, i - n) : (i + 1)])
-    return running_avg
 
 
 def simulate_random_old_agents(n=100, matches_each=15, lr=0.05):
