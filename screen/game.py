@@ -58,6 +58,7 @@ IN_WHITE = 90
 
 REWARD_ALIVE_PER_SEC = 1  # Small bonus every second for staying alive
 REWARD_DEAD_PENALTY = -10  # Penalty for dying
+REWARD_SCALING_FACTOR = 0.1  # Scale rewards to be within [-1, 1]
 
 INITIAL_SCORE = 10
 FPS_COUNTER_SIZE = 10
@@ -369,7 +370,7 @@ class Game:
             next_state.alive * REWARD_ALIVE_PER_SEC * elapsed
             + next_state.dead * REWARD_DEAD_PENALTY * (1 - won)
         )
-        final_reward = score_reward + alive_reward
+        final_reward = (score_reward + alive_reward) * REWARD_SCALING_FACTOR
 
         return final_reward, next_state.dead or won, won
 
