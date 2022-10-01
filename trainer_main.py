@@ -5,7 +5,9 @@ import os
 import torch
 import torch.backends.mps
 
+import constants
 import logger
+import utils
 from agent import Agent
 from screen import INPUT_SHAPE, Account, Action
 from worker import WorkerProcess
@@ -84,7 +86,7 @@ class Trainer:
                 self.old_agents_reward_history = json.load(f)
 
         self.n_steps = 0
-        self.n_trains = 0
+        self.n_trains = len(utils.load_json(constants.TRAIN_LOSS_HISTORY_FILE, []))
 
     async def run(self):
         self.device = init_device()

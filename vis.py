@@ -49,7 +49,7 @@ def reward(avg_n=500):
     mean = series.rolling(avg_n).mean()
 
     # Subtract 10 from the stdev due to the win/loss difference
-    std = series.rolling(avg_n).std() - 10
+    std = series.rolling(avg_n).std() - 1
 
     mean.plot()
     plt.title(f"Average reward over {avg_n} games")
@@ -62,7 +62,7 @@ def training_loss(window=10):
     x = np.arange(len(training_history))
     actor_loss = pd.Series([h["actor_loss"] for h in training_history])
     critic_loss = pd.Series([h["critic_loss"] for h in training_history])
-    entropy = pd.Series([h["entropy_loss"] for h in training_history])
+    entropy = pd.Series([h["entropy_loss"] for h in training_history]) * 0.01
     actor_loss.plot(label="Actor Loss")
     actor_loss.rolling(window).mean().plot(label=f"Actor loss avg")
     critic_loss.plot(label="Critic Loss")
