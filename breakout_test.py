@@ -93,10 +93,10 @@ class Trainer:
 
             pass
 
-        timesteps = 0
+        timesteps = self.reward_history[-1]["timesteps"] if self.reward_history else 0
         obs = [env.reset() for env in envs]
         total_rewards = [0 for _ in range(n_agents)]
-        while timesteps < 1e7:
+        while timesteps < 1e8:
             for i, env in enumerate(envs):
                 state = (
                     torch.tensor([obs[i]], dtype=torch.float32).to(self.device) / 255.0
