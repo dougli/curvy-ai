@@ -66,6 +66,9 @@ FPS_COUNTER_SIZE = 10
 MAX_ALIVE_WAIT_TIME = 15  # Seconds to wait for the game to start
 
 
+MISSILE_COOLDOWN = 4  # Seconds between missile shots. 3.5 but add 0.5 for safety
+JUMP_COOLDOWN = 5  # Seconds between jumps. 4.5 but add 0.5 for safety
+
 tesseract_api = PyTessBaseAPI()
 
 
@@ -93,6 +96,9 @@ class Game:
         self.score = INITIAL_SCORE
         self.last_reward_time = 0
         self.last_alive = 0
+        self.missile_cooldown = 0
+        self.jump_cooldown = 0
+
         self.wait_for_end_task = None
 
     async def launch(self, url: str) -> None:
@@ -307,6 +313,17 @@ class Game:
         return Player(-1, alive=False, dead=False)
 
     @property
+    def action_mask(self) -> list[bool]:
+        now = time.time()
+        return [
+            True,  # Go straight
+            True,  # Go left
+            True,  # Go right
+            now > self.missile_cooldown + MISSILE_COOLDOWN,
+            now > self.jump_cooldown + JUMP_COOLDOWN,
+        ]
+
+    @property
     def fps(self) -> float:
         if len(self.frame_times) == FPS_COUNTER_SIZE:
             return FPS_COUNTER_SIZE / (self.frame_times[-1] - self.frame_times[0])
@@ -321,6 +338,10 @@ class Game:
             key_events.append(self.page.keyboard.up(self.current_action.key))
         if action != Action.NOTHING:
             key_events.append(self.page.keyboard.down(action.key))
+        if action == Action.UP:
+            self.missile_cooldown = time.time()
+        if action == Action.DOWN:
+            self.jump_cooldown = time.time()
 
         await asyncio.gather(*key_events)
         self.current_action = action
@@ -383,6 +404,8 @@ class Game:
             if player.alive:
                 self.last_alive = time.time()
                 self.last_reward_time = time.time()
+                self.missile_cooldown = time.time()
+                self.jump_cooldown = time.time()
                 return True
 
             # Wait for a new frame
