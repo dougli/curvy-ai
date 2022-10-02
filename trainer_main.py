@@ -43,7 +43,7 @@ ACCOUNTS = [
 
 
 # Hyperparameters
-horizon = 2048 + len(ACCOUNTS) + 1  # Add 1 to account for last state in the trajectory
+horizon = 512 + len(ACCOUNTS) + 1  # Add 1 to account for last state in the trajectory
 lr = 0.0003
 n_epochs = 3
 minibatch_size = 32

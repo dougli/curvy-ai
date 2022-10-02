@@ -33,10 +33,6 @@ class ImpalaCNN(nn.Module):
                     padding=1,
                 )
             )
-            # Add batch normalization -- https://arxiv.org/pdf/1812.02341.pdf --
-            # Quantifying Generalization in Reinforcement Learning
-            # Dramatically increases generalizability and stability
-            feats_convs.append(nn.BatchNorm2d(num_ch))
             feats_convs.append(nn.MaxPool2d(kernel_size=3, stride=2, padding=1))
             self.feat_convs.append(nn.Sequential(*feats_convs))
 
@@ -54,7 +50,6 @@ class ImpalaCNN(nn.Module):
                         padding=1,
                     )
                 )
-                resnet_block.append(nn.BatchNorm2d(num_ch))
                 resnet_block.append(nn.ReLU())
                 resnet_block.append(
                     nn.Conv2d(
@@ -65,7 +60,6 @@ class ImpalaCNN(nn.Module):
                         padding=1,
                     )
                 )
-                resnet_block.append(nn.BatchNorm2d(num_ch))
                 if i == 0:
                     self.resnet1.append(nn.Sequential(*resnet_block))
                 else:
