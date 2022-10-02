@@ -10,5 +10,7 @@ def load_json(path, default=None):
 
 
 def save_json(path, data):
+    if not os.path.exists(path):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
         json.dump(data, f)
