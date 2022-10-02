@@ -9,6 +9,8 @@ import oldagents
 import torch
 from torch import nn
 
+from .categorical_masked import CategoricalMasked
+
 CHECKPOINT_FILE = "out/model_checkpoint"
 
 
@@ -77,7 +79,6 @@ class ImpalaCNN(nn.Module):
         )
         self.actor = nn.Sequential(
             nn.Linear(256, n_actions),
-            nn.Softmax(dim=-1),
         )
         self.critic = nn.Linear(256, 1)
 
@@ -85,13 +86,13 @@ class ImpalaCNN(nn.Module):
         o = self._forward_conv(torch.zeros(1, *shape))
         return int(np.prod(o.size()))
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None):
         x = self._forward_conv(x)
         x = self.fc(x)
 
         value = self.critic(x)
         dist = self.actor(x)
-        dist = torch.distributions.Categorical(logits=dist)
+        dist = CategoricalMasked(logits=dist, masks=mask)
         return dist, value
 
     def _forward_conv(self, x):

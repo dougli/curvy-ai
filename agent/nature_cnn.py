@@ -49,7 +49,7 @@ class NatureCNN(nn.Module):
         x = self.shared_middleware(x)
         value = self.critic(x)
         dist = self.actor(x)
-        dist = torch.distributions.Categorical(logits=dist)
+        dist = torch.distributions.Categorical(dist)
         return dist, value
 
     def choose_action(self, state):
