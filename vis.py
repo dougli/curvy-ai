@@ -11,7 +11,7 @@ from screen import INPUT_SHAPE, Action
 
 
 def conv_0_filters():
-    model = ImpalaCNN((4, 84, 84), len(Action))
+    model = ImpalaCNN((2, *INPUT_SHAPE), len(Action))
     model.load_checkpoint()
 
     weights: np.ndarray = model.feat_convs[0][0].weight.detach().numpy()  # type: ignore
@@ -48,7 +48,8 @@ def reward(avg_n=500):
 
     mean = series.rolling(avg_n).mean()
 
-    std = series.rolling(avg_n).std()
+    # Subtract 10 from the stdev due to the win/loss difference
+    std = series.rolling(avg_n).std() - 1
 
     mean.plot()
     plt.title(f"Average reward over {avg_n} games")

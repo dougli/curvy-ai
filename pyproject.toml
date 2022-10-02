@@ -15,11 +15,11 @@ Pillow = "^9.2.0"
 torch = "^1.12.1"
 torchvision = "^0.13.1"
 torchaudio = "^0.12.1"
+gym = {extras = ["classic_control"], version = "^0.25.2"}
 matplotlib = "^3.5.3"
 pyppeteer = "^1.0.2"
 termcolor = "^1.1.0"
 pandas = "^1.5.0"
-stable-baselines3 = {extras = ["extra"], version = "^1.6.1"}
 
 [tool.poetry.dev-dependencies]
 black = "^22.6.0"
