@@ -12,9 +12,9 @@ from torch import nn
 CHECKPOINT_FILE = "out/model_checkpoint"
 
 
-class CurvyNet(nn.Module):
+class NatureCNN(nn.Module):
     def __init__(self, input_shape, n_actions) -> None:
-        super(CurvyNet, self).__init__()
+        super(NatureCNN, self).__init__()
 
         self.shared = nn.Sequential(
             nn.Conv2d(input_shape[0], 32, kernel_size=8, stride=4),
@@ -49,7 +49,7 @@ class CurvyNet(nn.Module):
         x = self.shared_middleware(x)
         value = self.critic(x)
         dist = self.actor(x)
-        dist = torch.distributions.Categorical(dist)
+        dist = torch.distributions.Categorical(logits=dist)
         return dist, value
 
     def choose_action(self, state):

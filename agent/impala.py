@@ -91,7 +91,7 @@ class ImpalaCNN(nn.Module):
 
         value = self.critic(x)
         dist = self.actor(x)
-        dist = torch.distributions.Categorical(dist)
+        dist = torch.distributions.Categorical(logits=dist)
         return dist, value
 
     def _forward_conv(self, x):
