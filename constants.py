@@ -1,7 +1,9 @@
-OLD_AGENTS_REWARD_HISTORY_FILE = "out/old_agents_reward_history.json"
-OLD_AGENT_QUALITY_FILE = "out/old_agent_quality.json"
+OUT_DIR = "out"
 
-REWARD_HISTORY_FILE = "out/reward_history.json"
-TRAIN_LOSS_HISTORY_FILE = "out/train_loss_history"
+OLD_AGENTS_REWARD_HISTORY_FILE = f"{OUT_DIR}/old_agents_reward_history.json"
+OLD_AGENT_QUALITY_FILE = f"{OUT_DIR}/old_agent_quality.json"
 
-BACKUP_DIR = "out/backups"
+REWARD_HISTORY_FILE = f"{OUT_DIR}/reward_history.json"
+TRAIN_LOSS_HISTORY_FILE = f"{OUT_DIR}/train_loss_history"
+
+BACKUP_DIR = f"{OUT_DIR}/backups"
