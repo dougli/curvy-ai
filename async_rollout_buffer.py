@@ -189,7 +189,7 @@ class SingleAsyncBuffer(BaseBuffer):
         # Reshape needed when using multiple envs with discrete observations
         # as numpy cannot broadcast (n_discrete,) to (n_discrete, 1)
         if isinstance(self.observation_space, spaces.Discrete):
-            obs = obs.reshape(self.obs_shape)
+            obs = obs.reshape(self.obs_shape)  # type: ignore
 
         # Same reshape, for actions
         action = action.reshape((1, self.action_dim))

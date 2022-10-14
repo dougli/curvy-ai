@@ -143,6 +143,8 @@ class StableAgent(PPO):
             self.num_timesteps, self.total_timesteps
         )
 
+        self.train()
+
         # Display training infos
         if log_interval is not None and iteration % log_interval == 0:
             time_elapsed = max(
@@ -169,8 +171,6 @@ class StableAgent(PPO):
                 "time/total_timesteps", self.num_timesteps, exclude="tensorboard"
             )
             self.logger.dump(step=self.num_timesteps)
-
-        self.train()
 
         self.callback.on_training_end()
 

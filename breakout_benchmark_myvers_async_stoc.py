@@ -38,6 +38,7 @@ model = StableAgent(
     vf_coef=0.5,
     ent_coef=0.01,
     seed=SEED,
+    tensorboard_log="./logs",
 )
 model.rollout_buffer = AsyncRolloutBuffer(
     model.n_steps * 2,
@@ -80,7 +81,7 @@ while model.num_timesteps < model.total_timesteps:
             obs[idx],
             actions[0],
             rewards[0],
-            prev_dones[idx],
+            prev_dones[idx],  # type: ignore
             values[0],
             log_probs[0],
             env_num=idx,
@@ -95,14 +96,17 @@ while model.num_timesteps < model.total_timesteps:
 
     model.learn()
 
-model.save("ppo_breakout")
-
-del model  # remove to demonstrate saving and loading
-
-model = StableAgent.load("ppo_breakout")
-
-obs = env.reset()
-while True:
-    action, _states = model.predict(obs)
-    obs, rewards, dones, info = env.step(action)
-    env.render()
+    model.save("ppo_breakout", exclude=["callback"])
+    prev_callback = model.callback
+    del model
+    model = StableAgent.load("ppo_breakout", env=envs[0])
+    model.rollout_buffer = AsyncRolloutBuffer(
+        model.n_steps * 2,
+        envs[0].observation_space,
+        envs[0].action_space,
+        device=model.device,
+        gae_lambda=model.gae_lambda,
+        gamma=model.gamma,
+        n_envs=8,
+    )
+    model.setup_learn(total_timesteps=int(1e7), reset_num_timesteps=False)
