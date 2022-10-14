@@ -88,11 +88,9 @@ class AsyncRolloutBuffer:
             )
             start_idx += batch_size
 
-    def compute_returns_and_advantage(
-        self, last_values: th.Tensor, dones: np.ndarray
-    ) -> None:
-        for buffer, last_value, done in zip(self.buffers, last_values, dones):
-            buffer.compute_returns_and_advantage(last_value, done)
+    def compute_returns_and_advantage(self) -> None:
+        for buffer in self.buffers:
+            buffer.compute_returns_and_advantage()
 
 
 class SingleAsyncBuffer(BaseBuffer):
@@ -110,19 +108,6 @@ class SingleAsyncBuffer(BaseBuffer):
         )
         self.gae_lambda = gae_lambda
         self.gamma = gamma
-        self.observations, self.actions, self.rewards, self.advantages = (
-            None,
-            None,
-            None,
-            None,
-        )
-        self.returns, self.episode_starts, self.values, self.log_probs = (
-            None,
-            None,
-            None,
-            None,
-        )
-        self.generator_ready = False
         self.reset()
 
     def reset(self) -> None:
@@ -136,13 +121,10 @@ class SingleAsyncBuffer(BaseBuffer):
         self.values = np.zeros((self.buffer_size,), dtype=np.float32)
         self.log_probs = np.zeros((self.buffer_size,), dtype=np.float32)
         self.advantages = np.zeros((self.buffer_size,), dtype=np.float32)
-        self.generator_ready = False
         self.pos = 0
         super().reset()
 
-    def compute_returns_and_advantage(
-        self, last_values: th.Tensor, dones: np.ndarray
-    ) -> None:
+    def compute_returns_and_advantage(self) -> None:
         """
         Post-processing step: compute the lambda-return (TD(lambda) estimate)
         and GAE(lambda) advantage.
@@ -161,17 +143,13 @@ class SingleAsyncBuffer(BaseBuffer):
         :param last_values: state value estimation for the last step (one for each env)
         :param dones: if the last step was a terminal step (one bool for each env).
         """
-        # Convert to numpy
-        last_values = last_values.clone().cpu().numpy().flatten()
-
         last_gae_lam = 0
-        for step in reversed(range(self.pos)):
-            if step == self.buffer_size - 1:
-                next_non_terminal = 1.0 - dones
-                next_values = last_values
-            else:
-                next_non_terminal = 1.0 - self.episode_starts[step + 1]
-                next_values = self.values[step + 1]
+
+        # Discard the last element of the trajectory because we don't have the next value
+        for step in reversed(range(self.pos - 1)):
+            assert step < self.pos - 1
+            next_non_terminal = 1.0 - self.episode_starts[step + 1]
+            next_values = self.values[step + 1]
             delta = (
                 self.rewards[step]
                 + self.gamma * next_values * next_non_terminal
@@ -214,7 +192,7 @@ class SingleAsyncBuffer(BaseBuffer):
             obs = obs.reshape(self.obs_shape)
 
         # Same reshape, for actions
-        action = action.reshape((self.n_envs, self.action_dim))
+        action = action.reshape((1, self.action_dim))
 
         self.observations[self.pos] = np.array(obs).copy()
         self.actions[self.pos] = np.array(action).copy()
@@ -223,38 +201,12 @@ class SingleAsyncBuffer(BaseBuffer):
         self.values[self.pos] = value.clone().cpu().numpy().flatten()
         self.log_probs[self.pos] = log_prob.clone().cpu().numpy()
         self.pos += 1
-        if self.pos == self.buffer_size:
-            self.full = True
 
-    def get(
-        self, batch_size: Optional[int] = None
-    ) -> Generator[RolloutBufferSamples, None, None]:
-        assert self.pos == self.buffer_size, "Buffer isnt full!"
-        indices = np.random.permutation(self.pos * self.n_envs)
-        # Prepare the data
-        if not self.generator_ready:
-
-            # _tensor_names = [
-            #     "observations",
-            #     "actions",
-            #     "values",
-            #     "log_probs",
-            #     "advantages",
-            #     "returns",
-            # ]
-
-            # for tensor in _tensor_names:
-            #     self.__dict__[tensor] = self.swap_and_flatten(self.__dict__[tensor])
-            self.generator_ready = True
-
+    def get(self) -> Generator[RolloutBufferSamples, None, None]:
+        indices = np.random.permutation(self.pos - 1)
         # Return everything, don't create minibatches
-        if batch_size is None:
-            batch_size = self.pos * self.n_envs
-
-        start_idx = 0
-        while start_idx < self.pos * self.n_envs:
-            yield self._get_samples(indices[start_idx : start_idx + batch_size])
-            start_idx += batch_size
+        batch_size = self.pos - 1
+        yield self._get_samples(indices[0:batch_size])
 
     def _get_samples(self, batch_inds: np.ndarray) -> RolloutBufferSamples:
         data = (

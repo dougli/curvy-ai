@@ -22,7 +22,7 @@ model = StableAgent(
     "CnnPolicy",
     env,
     verbose=1,
-    n_steps=128,
+    n_steps=129,
     n_epochs=4,
     batch_size=256,
     learning_rate=(lambda rem: 2.5e-4 * rem),
@@ -85,9 +85,7 @@ while model.num_timesteps < model.total_timesteps:
         # Compute value for the last timestep
         values = model.policy.predict_values(obs_as_tensor(obs, model.device))
 
-    model.rollout_buffer.compute_returns_and_advantage(
-        last_values=values, dones=prev_dones
-    )
+    model.rollout_buffer.compute_returns_and_advantage()
 
     model.callback.on_rollout_end()
 
