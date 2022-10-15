@@ -1,3 +1,4 @@
+import os
 import random
 
 import torch as th
@@ -38,8 +39,10 @@ model = StableAgent(
     vf_coef=0.5,
     ent_coef=0.01,
     seed=SEED,
-    tensorboard_log="./logs",
+    tensorboard_log="./breakout/logs",
 )
+if os.path.exists("breakout/models/ppo.zip"):
+    model = StableAgent.load("breakout/models/ppo", env=envs[0])
 model.rollout_buffer = AsyncRolloutBuffer(
     model.n_steps * 2,
     envs[0].observation_space,
@@ -49,7 +52,7 @@ model.rollout_buffer = AsyncRolloutBuffer(
     gamma=model.gamma,
     n_envs=8,
 )
-model.setup_learn(total_timesteps=int(1e7))
+model.setup_learn(total_timesteps=int(1e7), reset_num_timesteps=False)
 
 
 while model.num_timesteps < model.total_timesteps:
@@ -58,7 +61,7 @@ while model.num_timesteps < model.total_timesteps:
     n_steps = 0
     model.rollout_buffer.reset()  # type: ignore
     while n_steps < model.n_steps * n_envs:
-        idx = random.randint(0, n_envs - 1)
+        idx = random.randint(0, n_envs - 2)
 
         with th.no_grad():
             # Convert to pytorch tensor or to TensorDict
@@ -96,10 +99,9 @@ while model.num_timesteps < model.total_timesteps:
 
     model.learn()
 
-    model.save("ppo_breakout", exclude=["callback"])
-    prev_callback = model.callback
+    model.save("breakout/models/ppo", exclude=["callback"])
     del model
-    model = StableAgent.load("ppo_breakout", env=envs[0])
+    model = StableAgent.load("breakout/models/ppo", env=envs[0])
     model.rollout_buffer = AsyncRolloutBuffer(
         model.n_steps * 2,
         envs[0].observation_space,

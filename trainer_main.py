@@ -4,12 +4,15 @@ import os
 
 import torch
 import torch.backends.mps
+from gym.spaces import Box, Discrete
 
 import constants
 import logger
 import utils
-from agent import Agent
-from screen import INPUT_SHAPE, Account, Action
+from agent.impala_feat_ext import ImpalaCNNFeat
+from agent.stable_agent import StableAgent
+from async_rollout_buffer import AsyncRolloutBuffer
+from screen import INPUT_SHAPE, Account, Action, FakeGameEnv
 from worker import WorkerProcess
 
 ACCOUNTS = [
@@ -43,14 +46,12 @@ ACCOUNTS = [
 
 
 # Hyperparameters
-horizon = 512 + len(ACCOUNTS) + 1  # Add 1 to account for last state in the trajectory
-lr = 0.0003
-n_epochs = 3
-minibatch_size = 32
-gamma = 0.99
-gae_lambda = 0.95
-policy_clip = 0.2
-vf_coeff = 1
+horizon = 1024 + len(ACCOUNTS)  # Add 1 to account for last state in the trajectory
+lr = lambda rem: 2.5e-4 * rem
+n_epochs = 4
+minibatch_size = 256
+policy_clip = 0.1
+vf_coeff = 0.5
 entropy_coeff = 0.01
 
 SAVE_MODEL_EVERY_N_TRAINS = 30
@@ -90,25 +91,37 @@ class Trainer:
 
     async def run(self):
         self.device = init_device()
+        env = FakeGameEnv()
 
         torch.set_num_threads(N_TRAINING_THREADS)
 
-        self.agent = Agent(
-            device=self.device,
-            n_actions=len(Action),
-            input_shape=INPUT_SHAPE,
-            gamma=gamma,
-            gae_lambda=gae_lambda,
-            policy_clip=policy_clip,
-            minibatch_size=minibatch_size,
-            n_agents=len(ACCOUNTS),
+        self.agent = StableAgent(
+            "CnnPolicy",
+            env=env,
+            verbose=1,
+            n_steps=horizon,
+            policy_kwargs={"features_extractor_class": ImpalaCNNFeat},
             n_epochs=n_epochs,
-            alpha=lr,
-            vf_coeff=vf_coeff,
-            entropy_coeff=entropy_coeff,
+            batch_size=minibatch_size,
+            learning_rate=lr,
+            clip_range=policy_clip,
+            vf_coef=vf_coeff,
+            ent_coef=entropy_coeff,
+            tensorboard_log="curve-impala/logs",
         )
-        if not self.agent.load_models():
-            self.agent.save_models()
+        if os.path.exists("curve-impala/models/ppo.zip"):
+            self.agent = StableAgent.load("curve-impala/models/ppo.zip", env=env)
+        self.agent.save("curve-impala/models/ppo.zip", exclude=["callback"])
+        self.agent.rollout_buffer = AsyncRolloutBuffer(  # type: ignore
+            self.agent.n_steps,
+            env.observation_space,
+            env.action_space,
+            device=self.agent.device,
+            gae_lambda=self.agent.gae_lambda,
+            gamma=self.agent.gamma,
+            n_envs=len(ACCOUNTS),
+        )
+        self.agent.setup_learn(total_timesteps=int(1e7), reset_num_timesteps=False)
 
         self.workers = [
             WorkerProcess(i, account, self.remember, self.log_reward)
@@ -117,28 +130,26 @@ class Trainer:
 
         while True:
             await asyncio.sleep(10)
-            # for i, worker in enumerate(self.workers):
-            #     if not worker.alive:
-            #         first = int(i / 2) * 2
-            #         second = int(i / 2) * 2 + 1
-            #         self.reload_worker(first)
-            #         self.reload_worker(second)
-
-    def reload_worker(self, idx: int):
-        self.workers[idx].reload()
-        self.agent.purge_memory(idx)
 
     def remember(self, id, state, action, probs, vals, reward, done):
-        self.agent.remember(id, state, action, probs, vals, reward, done)
-        self.n_steps += 1
-        if self.n_steps % horizon == 0:
+        self.agent.rollout_buffer.add(  # type: ignore
+            state, action, reward, done, vals, probs, env_num=id  # type: ignore
+        )
+        self.agent.num_timesteps += 1
+        if self.agent.num_timesteps % horizon == 0:
             logger.warning("Training agent")
+            self.agent.rollout_buffer.compute_returns_and_advantage()  # type: ignore
+            self.agent.callback.on_rollout_end()
             self.agent.learn()
-            self.agent.save_models()
-            self.n_trains += 1
-            if self.n_trains % SAVE_MODEL_EVERY_N_TRAINS == 0:
-                self.agent.backup_models()
+            self.agent.save("curve-impala/models/ppo.zip", exclude=["callback"])
 
+            if (self.agent.num_timesteps / horizon) % SAVE_MODEL_EVERY_N_TRAINS == 0:
+                self.agent.save(
+                    f"curve-impala/models/old/{self.agent.num_timesteps}",
+                    exclude=["callback"],
+                )
+
+            self.agent.rollout_buffer.reset()  # type: ignore
             self.inform_workers()
 
     def log_reward(self, data):
@@ -147,9 +158,9 @@ class Trainer:
             with open(OLD_AGENTS_REWARD_HISTORY_FILE, "w") as f:
                 json.dump(self.old_agents_reward_history, f)
         else:
-            self.reward_history.append(data)
-            with open(REWARD_HISTORY_FILE, "w") as f:
-                json.dump(self.reward_history, f)
+            self.agent._update_info_buffer(
+                [{"episode": {"r": data["reward"], "l": data["time"]}}]
+            )
 
     def inform_workers(self):
         for worker in self.workers:

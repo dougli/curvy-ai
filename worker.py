@@ -9,8 +9,9 @@ import numpy as np
 import torch
 
 import logger
-from agent import ImpalaCNN
+from agent.stable_agent import StableAgent
 from screen import INPUT_SHAPE, Account, Action, Game
+from screen.fake_env import FakeGameEnv
 
 N_GAME_THREADS = 2
 CURVE_FEVER = "https://curvefever.pro"
@@ -95,8 +96,7 @@ class Worker:
 
         self.cpu = torch.device("cpu")
 
-        self.model = ImpalaCNN((2, *INPUT_SHAPE), len(Action)).to(self.cpu)
-        self.model.load_checkpoint()
+        self.model = StableAgent.load("curve-impala/models/ppo", env=FakeGameEnv())  # type: ignore
 
         self.model_lock = mp.Lock()
         self.old_model_name = None
@@ -136,12 +136,13 @@ class Worker:
                 just_started = True
 
             self.model_lock.acquire()
-            if random.random() < RANDOM_OLD_MODEL:
-                self.old_model_name = self.model.load_random_backup()
-            elif self.old_model_name:
-                self.model.load_checkpoint()
-                self.old_model_name = None
+            # if random.random() < RANDOM_OLD_MODEL:
+            #     self.old_model_name = self.model.load_random_backup()
+            # elif self.old_model_name:
+            #     self.model.load_checkpoint()
+            #     self.old_model_name = None
             self.model_lock.release()
+            self.model.policy.set_training_mode(False)
 
             ready_to_play = await self.game.wait_for_alive()
             if not ready_to_play:
@@ -154,23 +155,25 @@ class Worker:
             await asyncio.sleep(INITIAL_SLEEP)
             self.game.update_last_reward_time()
 
-            done = False
+            prev_done = True
             n_steps_inner = 0
             start_time = time.time()
             round_reward = 0
             prev_state = np.zeros((1, *INPUT_SHAPE))
             won = False
-            while not done:
+            while n_steps_inner == 0 or not prev_done:
                 state = self.game.play_area
                 stacked = np.concatenate([prev_state, state], axis=0)
                 torch_state = torch.tensor([stacked], dtype=torch.float32).to(self.cpu)
-                action, prob, value = self.model.choose_action(torch_state)
-                reward, done, won = await self.game.step(Action(action))
+                with torch.no_grad():
+                    action, value, prob = self.model.policy(torch_state)
+                reward, done, won = await self.game.step(Action(action.cpu().numpy()))
                 n_steps_inner += 1
                 round_reward += reward
                 if not self.old_model_name:
-                    self.remember(stacked, action, prob, value, reward, done)
+                    self.remember(stacked, action, prob, value, reward, prev_done)
                 prev_state = state
+                prev_done = done
             elapsed = time.time() - start_time
             logger.train_info(
                 f"round reward: {round_reward}, time: {elapsed}, FPS: {n_steps_inner / elapsed}"
@@ -206,7 +209,8 @@ class Worker:
                 if data["type"] == "update_model":
                     self.model_lock.acquire()
                     if not self.old_model_name:
-                        self.model.load_checkpoint()
+                        self.model = StableAgent.load("curve-impala/models/ppo", env=FakeGameEnv())  # type: ignore
+                        logger.success("Updated model in worker")
                     self.model_lock.release()
                 elif data["type"] == "reload":
                     logger.warning("Reloading worker, cancelling previous main loop")

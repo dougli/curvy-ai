@@ -275,15 +275,16 @@ class Game:
         )
 
         # Clip away the background
-        image = np.clip((image - IN_BLACK) * (255.0 / (IN_WHITE - IN_BLACK)), 0, 255.0)
+        image = np.clip(
+            (image - IN_BLACK) * (255.0 / (IN_WHITE - IN_BLACK)), 0, 255.0
+        ).astype(np.uint8)
 
         if self.show_play_area:
-            cv2.imshow("image", image.astype(np.uint8))
+            cv2.imshow("image", image)
             cv2.waitKey(1)
 
         # Rescale to 0-1 and return as 3D array (for compatibility with the
         # neural network).
-        image = image / 255.0
         image = np.expand_dims(image, axis=(0))
         return image
 
