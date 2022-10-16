@@ -21,7 +21,6 @@ class ImpalaCNNFeat(BaseFeaturesExtractor):
 
     def __init__(self, observation_space: gym.spaces.Box, features_dim: int = 256):
         super().__init__(observation_space, features_dim)
-        logger.success("Instantiating ImpalaCNNFeat")
         # We assume CxHxW images (channels first)
         # Re-ordering will be done by pre-preprocessing or wrapper
         assert is_image_space(observation_space, check_channels=False), (

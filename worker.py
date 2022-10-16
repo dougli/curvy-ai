@@ -3,12 +3,13 @@ import multiprocessing as mp
 import random
 import time
 from queue import Empty
-from typing import Callable
+from typing import Callable, Optional
 
 import numpy as np
 import torch
 
 import logger
+import oldagents
 from agent.stable_agent import StableAgent
 from screen import INPUT_SHAPE, Account, Action, Game
 from screen.fake_env import FakeGameEnv
@@ -136,11 +137,14 @@ class Worker:
                 just_started = True
 
             self.model_lock.acquire()
-            # if random.random() < RANDOM_OLD_MODEL:
-            #     self.old_model_name = self.model.load_random_backup()
-            # elif self.old_model_name:
-            #     self.model.load_checkpoint()
-            #     self.old_model_name = None
+            if random.random() < RANDOM_OLD_MODEL:
+                self.old_model_name = self.load_random_backup()
+            elif self.old_model_name:
+                logger.success("Restoring latest model")
+                self.model = StableAgent.load(
+                    "curve-impala/models/ppo", env=FakeGameEnv()
+                )
+                self.old_model_name = None
             self.model_lock.release()
             self.model.policy.set_training_mode(False)
 
@@ -220,6 +224,15 @@ class Worker:
                     self.main_loop_task = asyncio.create_task(self.main_loop())
             except Empty:
                 await asyncio.sleep(0.25)
+
+    def load_random_backup(self) -> Optional[str]:
+        agent_name = oldagents.select_old_agent("curve-impala")
+        if agent_name:
+            logger.success(f"Loading old model {agent_name}")
+            self.model = StableAgent.load(
+                f"curve-impala/models/old/{agent_name}", env=FakeGameEnv()
+            )
+        return agent_name
 
 
 def start_worker_process(*args, **kwargs):

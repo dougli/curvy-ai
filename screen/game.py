@@ -227,7 +227,7 @@ class Game:
 
     async def wait_for_player_ready(self, username: str) -> None:
         logger.info(f"Waiting for player '{username}' to join...")
-        await self.page.xpath(f'//*[contains(text(), "{username}")]')
+        await self.page.waitForXPath(f'//*[contains(text(), "{username}")]')
 
     async def start_match(self) -> None:
         logger.info("Clicking the play button...")

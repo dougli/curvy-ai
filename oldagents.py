@@ -3,15 +3,14 @@ import random
 
 import numpy as np
 
-import constants
 import utils
 
-OLD_AGENT_LEARN_RATE = 0.05
+OLD_AGENT_LEARN_RATE = 0.10
 
 
-def old_agent_probs():
+def old_agent_probs(folder: str):
     old_agents_reward_history = utils.load_json(
-        constants.OLD_AGENTS_REWARD_HISTORY_FILE, default=[]
+        f"{folder}/models/old/reward_history.json", default=[]
     )
 
     logits: dict[str, float] = {}
@@ -30,7 +29,7 @@ def old_agent_probs():
             logits[agent] -= OLD_AGENT_LEARN_RATE / (len(logits) * prob)
 
     # If there is an agent that hasn't been played yet, initialize it to the max chance
-    available_old_agents = list_old_agents()
+    available_old_agents = list_old_agents(folder)
     for agent in available_old_agents:
         if agent not in logits:
             if not logits:
@@ -42,28 +41,26 @@ def old_agent_probs():
     return probs
 
 
-def list_old_agents() -> list[str]:
-    directory = os.path.join(os.path.dirname(__file__), constants.BACKUP_DIR)
+def list_old_agents(folder: str) -> list[str]:
+    directory = os.path.join(folder, "models", "old")
     if not os.path.exists(directory):
         return []
     backups = os.listdir(directory)
-    if ".DS_Store" in backups:
-        backups.remove(".DS_Store")
-    backups = [backup for backup in backups if backup.startswith("model_checkpoint")]
+    backups = [backup for backup in backups if backup.endswith(".zip")]
     return backups
 
 
-def select_old_agent():
-    probs = old_agent_probs()
+def select_old_agent(folder: str):
+    probs = old_agent_probs(folder)
     if not probs:
         return None
     agent = random.choices(list(probs.keys()), list(probs.values()))[0]
     return agent
 
 
-def win_loss_ratio():
+def win_loss_ratio(folder: str):
     old_agents_reward_history = utils.load_json(
-        constants.OLD_AGENTS_REWARD_HISTORY_FILE, default=[]
+        f"{folder}/models/old/reward_history.json", default=[]
     )
     wins = 0
     losses = 0
@@ -75,9 +72,9 @@ def win_loss_ratio():
     return {"losses": wins, "wins": losses}
 
 
-def win_loss_ratio_per_agent():
+def win_loss_ratio_per_agent(folder: str):
     old_agents_reward_history = utils.load_json(
-        constants.OLD_AGENTS_REWARD_HISTORY_FILE, default=[]
+        f"{folder}/models/old/reward_history.json", default=[]
     )
     agents = {}
     for entry in old_agents_reward_history:

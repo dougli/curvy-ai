@@ -56,8 +56,7 @@ entropy_coeff = 0.01
 
 SAVE_MODEL_EVERY_N_TRAINS = 30
 N_TRAINING_THREADS = 4
-REWARD_HISTORY_FILE = "out/reward_history.json"
-OLD_AGENTS_REWARD_HISTORY_FILE = "out/old_agents_reward_history.json"
+OLD_AGENTS_REWARD_HISTORY_FILE = "curve-impala/models/old/reward_history.json"
 
 
 def init_device():
@@ -77,11 +76,7 @@ def init_device():
 
 class Trainer:
     def __init__(self):
-        self.reward_history = []
         self.old_agents_reward_history = []
-        if os.path.exists(REWARD_HISTORY_FILE):
-            with open(REWARD_HISTORY_FILE, "r") as f:
-                self.reward_history = json.load(f)
         if os.path.exists(OLD_AGENTS_REWARD_HISTORY_FILE):
             with open(OLD_AGENTS_REWARD_HISTORY_FILE, "r") as f:
                 self.old_agents_reward_history = json.load(f)
