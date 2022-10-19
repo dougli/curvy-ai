@@ -5,7 +5,7 @@ import numpy as np
 
 import utils
 
-OLD_AGENT_LEARN_RATE = 0.10
+OLD_AGENT_LEARN_RATE = 0.15
 
 
 def old_agent_probs(folder: str):

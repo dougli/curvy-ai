@@ -105,7 +105,7 @@ class Worker:
         self.game = Game(
             self.account.match_name,
             self.account.match_password,
-            show_screen=True,
+            show_play_area=self.account.is_host,
         )
 
     async def run(self):
