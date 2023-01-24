@@ -24,7 +24,8 @@ paper. I used the neural network architecture listed in the [IMPALA paper](https
 both models up to 1.5 million timesteps.
 2. Some benchmarking code against Atari breakout. I added this to make sure I didn't introduce subtle bugs while making the async PPO algorithm work.
 3. Browser automation using [Pyppeteer](https://github.com/pyppeteer/pyppeteer) to start the game. This gave me access to the low level
-[Chrome DevTools API](https://chromedevtools.github.io/devtools-protocol/) which I otherwise wouldn't have had if I used Selenium.
+[Chrome DevTools API](https://chromedevtools.github.io/devtools-protocol/) which I otherwise wouldn't have had if I used Selenium. Once the game
+starts, I continually take screenshots of the browser area, convert that to grayscale and clean it up, before feeding it into the agent.
 4. OCR'd the scoring region using Tesseract to detect game start / end states and who won the game
 5. Wired it all together to collect experience trajectories, run training asynchronously in the GPU. `multiprocessing` to avoid Python's global
 interpreter lock.
