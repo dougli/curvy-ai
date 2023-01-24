@@ -7,7 +7,7 @@ tron-like game, where players pilot a little craft with an increasingly long tai
 
 We'd play this game every Friday and he frequently beat all of us. I'm a software engineer by trade and I have no ML experience, but I thought, what 
 the heck, I'll see if I can train something to beat him. At the very least, I wanted to learn and see if it was possible to "cheat" on an online game
-by training an agent.
+by training an agent. Specifically, I wanted to see if it would work by training on pixel data within the real game as opposed to anything else.
 
 ## Details
 
