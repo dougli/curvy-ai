@@ -42,11 +42,10 @@ on average.
 I did not run this agent against human players or my coworker. There's a few reasons:
 
 1. I had accomplished my primary goals of learning a lot, and was happy that I have a solid understanding of PPO.
-2. I invested into (or obsessed over) this for many weeknights and weekends outside of my full-time job, and raising a 2 year old daughter, 
-to get this all to work. At some point, I just got tired. To make this play against human players would require improvements in the browser
-automation code so that it could join lobbies with humans being the host.
-3. It doesn't perform at the level of an average human player, which I estimate to be 15 seconds or more. Given the training graphs, it seems 
-clear that throwing further compute at the problem will lead to a better agent, but I didn't want to pay for compute.
-4. It likely doesn't generalize well. While the agent plays against older versions of itself, it's settled into a strategy of
+2. It doesn't perform at the level of an average human player, which I estimate to be 15 seconds or more. It got to a point where throwing
+further compute at the problem will lead to a better agent, but I didn't want to pay for compute.
+3. It likely doesn't generalize well. While the agent plays against older versions of itself, it's settled into a strategy of
 simply trying to outlive the other agent rather than aggressively trying to tackle and kill the other agent first. I wanted to investigate
-batch normalization but I didn't want to spend another couple of weeks trying to make this work.
+batch normalization but I didn't want to spend another few weeks of my laptop idling to build and train another agent.
+4. I invested into (or obsessed over) this for many weeknights and weekends outside of my full-time job, while raising a 2 year old. 
+At some point, I just got tired.
