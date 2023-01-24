@@ -28,7 +28,8 @@ both models up to 1.5 million timesteps.
 starts, I continually take screenshots of the browser area, convert that to grayscale and clean it up, before feeding it into the agent.
 4. OCR'd the scoring region using Tesseract to detect game start / end states and who won the game
 5. Wired it all together to collect experience trajectories, run training asynchronously in the GPU. `multiprocessing` to avoid Python's global
-interpreter lock.
+interpreter lock. There is a risk of stale experience affecting performance because I'm collecting trajectories in parallel -- it's a real-time game
+and we can't just pause it to train an agent. However, the data was never older than 1 parameter version and according to [OpenAI's Dota 2](https://cdn.openai.com/dota-2.pdf) work, this level of staleness doesn't dramatically affect performance.
 6. Logging and output to tensorboard
 7. saving previous agents to avoid strategy collapse.
 8. Reward shaping to encourage the agent to live longer, as the reward signal would have too much noise otherwise.
